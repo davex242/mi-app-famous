@@ -148,16 +148,13 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
     if (!formData.host_id.trim()) newErrors.host_id = 'El ID del emisor es requerido';
     if (!formData.reg_date) newErrors.reg_date = 'La fecha de registro es requerida';
     if (!formData.phone_number.trim()) newErrors.phone_number = 'El número de WhatsApp es requerido';
-    if (!formData.user_id.trim()) newErrors.user_id = 'El ID de usuario es requerido';
-    if (!formData.pay_method) newErrors.pay_method = 'El método de pago es requerido';
     
     // Estado y Reclutador - Todos requeridos excepto ver_date
     if (!formData.estado) newErrors.estado = 'El estado es requerido';
     if (!formData.reclutador.trim()) newErrors.reclutador = 'El reclutador es requerido';
     if (!formData.rec_id.trim()) newErrors.rec_id = 'El ID del reclutador es requerido';
     
-    // Capturas - Todas requeridas
-    if (!formData.captura) newErrors.captura = 'La captura del método de pago es requerida';
+    // Capturas - Todas requeridas excepto la primera (método de pago)
     if (!formData.capture1) newErrors.capture1 = 'La captura del formulario de verificación es requerida';
     if (!formData.capture2) newErrors.capture2 = 'La captura de transmisión es requerida';
     if (!formData.capture3) newErrors.capture3 = 'La captura del chat de WhatsApp es requerida';
@@ -277,12 +274,9 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
       formData.host_id.trim() !== '' &&
       formData.reg_date !== '' &&
       formData.phone_number.trim() !== '' &&
-      formData.user_id.trim() !== '' &&
-      formData.pay_method !== '' &&
       formData.estado !== '' &&
       formData.reclutador.trim() !== '' &&
       formData.rec_id.trim() !== '' &&
-      formData.captura !== '' &&
       formData.capture1 !== '' &&
       formData.capture2 !== '' &&
       formData.capture3 !== ''
@@ -390,7 +384,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID de Usuario <span className="text-red-500">*</span>
+              ID de Usuario
             </label>
             <input
               type="text"
@@ -404,7 +398,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Método de Pago <span className="text-red-500">*</span>
+              Método de Pago
             </label>
             <select
               value={formData.pay_method}
@@ -567,7 +561,6 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               value={formData.captura}
               onChange={(url) => handleChange('captura', url)}
               disabled={isFormDisabled}
-              required
             />
             {errors.captura && <p className="mt-1 text-sm text-red-500">{errors.captura}</p>}
           </div>
