@@ -16,7 +16,9 @@ import {
   AlertTriangle,
   Check,
   Loader2,
-  Wand2
+  Wand2,
+  Download,
+  PlusCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Host } from '@/types';
@@ -29,7 +31,56 @@ interface BulkVerifyResult {
   success: string[];
   notFound: string[];
   alreadyVerified: string[];
+  totalValidIds: number;
+  duplicatesRemoved: number;
+  invalidTokens: string[];
+  verificationDate: string;
 }
+
+// ===== SHARED ID PARSING / NORMALIZATION =====
+// Splits by any combination of: whitespace (spaces, newlines, tabs, CR), commas, semicolons, pipes.
+// Validates that tokens are numeric. Removes duplicates preserving first-occurrence order.
+interface ParsedIds {
+  validIds: string[];
+  duplicatesRemoved: number;
+  invalidTokens: string[];
+}
+
+const parseAndNormalizeIds = (input: string): ParsedIds => {
+  if (!input.trim()) {
+    return { validIds: [], duplicatesRemoved: 0, invalidTokens: [] };
+  }
+
+  const tokens = input
+    .split(/[\s,;|]+/)
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+
+  const validIds: string[] = [];
+  const invalidTokens: string[] = [];
+  const seenValid = new Set<string>();
+  const seenInvalid = new Set<string>();
+  let duplicatesRemoved = 0;
+
+  for (const token of tokens) {
+    if (!/^\d+$/.test(token)) {
+      // Non-numeric token — report as invalid (dedupe for display)
+      if (!seenInvalid.has(token)) {
+        seenInvalid.add(token);
+        invalidTokens.push(token);
+      }
+      continue;
+    }
+    if (seenValid.has(token)) {
+      duplicatesRemoved++;
+      continue;
+    }
+    seenValid.add(token);
+    validIds.push(token);
+  }
+
+  return { validIds, duplicatesRemoved, invalidTokens };
+};
 
 export default function AccountVerification() {
   const { user } = useAuth();
@@ -57,6 +108,8 @@ export default function AccountVerification() {
   const [bulkValidationError, setBulkValidationError] = useState<string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkVerifyResult | null>(null);
+  const [creatingMissing, setCreatingMissing] = useState(false);
+  const [createMissingResult, setCreateMissingResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
 
   const fetchHosts = async () => {
     setLoading(true);
@@ -178,71 +231,45 @@ export default function AccountVerification() {
 
   // ===== BULK VERIFY FUNCTIONS =====
 
-  // Parse IDs from any format: commas, newlines, spaces, tabs, semicolons, or any combination
-  const parseIds = (input: string): string[] => {
-    if (!input.trim()) return [];
-    
-    // Split by any common delimiter: comma, newline, tab, semicolon, pipe, or multiple spaces
-    const ids = input
-      .split(/[,\n\r\t;|]+/)
-      .map(id => id.trim())
-      .filter(id => id.length > 0);
-
-    // Remove duplicates while preserving order
-    return [...new Set(ids)];
-  };
-
-  const validateBulkIds = (input: string): { valid: boolean; ids: string[]; error: string | null; duplicatesRemoved: number } => {
-    if (!input.trim()) {
-      return { valid: false, ids: [], error: 'Por favor ingresa al menos un ID', duplicatesRemoved: 0 };
-    }
-
-    // Split by any common delimiter
-    const rawIds = input
-      .split(/[,\n\r\t;|]+/)
-      .map(id => id.trim())
-      .filter(id => id.length > 0);
-
-    if (rawIds.length === 0) {
-      return { valid: false, ids: [], error: 'No se detectaron IDs válidos. Ingresa los IDs en cualquier formato (separados por comas, líneas, espacios, etc.)', duplicatesRemoved: 0 };
-    }
-
-    // Check for and remove duplicates
-    const uniqueIds = [...new Set(rawIds)];
-    const duplicatesRemoved = rawIds.length - uniqueIds.length;
-
-    return { valid: true, ids: uniqueIds, error: null, duplicatesRemoved };
-  };
-
   const handleBulkIdsChange = (value: string) => {
     setBulkIds(value);
     setBulkValidationError(null);
     setBulkResult(null);
+    setCreateMissingResult(null);
   };
 
   // Format the list to comma-separated
   const handleFormatList = () => {
-    const ids = parseIds(bulkIds);
-    if (ids.length > 0) {
-      setBulkIds(ids.join(', '));
+    const { validIds, invalidTokens } = parseAndNormalizeIds(bulkIds);
+    if (validIds.length === 0 && invalidTokens.length === 0) return;
+    const allTokens = [...validIds, ...invalidTokens];
+    if (allTokens.length > 0) {
+      setBulkIds(allTokens.join(', '));
       setBulkValidationError(null);
     }
   };
 
   const handleBulkVerify = async () => {
-    const validation = validateBulkIds(bulkIds);
-    
-    if (!validation.valid) {
-      setBulkValidationError(validation.error);
+    const parsed = parseAndNormalizeIds(bulkIds);
+
+    if (parsed.validIds.length === 0) {
+      if (parsed.invalidTokens.length > 0) {
+        setBulkValidationError(
+          `No se encontraron IDs numéricos válidos. Tokens inválidos detectados: ${parsed.invalidTokens.join(', ')}`
+        );
+      } else {
+        setBulkValidationError('Por favor ingresa al menos un ID numérico');
+      }
       return;
     }
 
     setBulkProcessing(true);
     setBulkValidationError(null);
     setBulkResult(null);
+    setCreateMissingResult(null);
 
     try {
-      const idsToVerify = validation.ids;
+      const idsToVerify = parsed.validIds;
       const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
       // Process IDs in batches to handle large lists
@@ -264,18 +291,17 @@ export default function AccountVerification() {
       }
 
       // Categorize the IDs
-      const foundIds = new Set(allExistingHosts.map(h => h.host_id));
+      const foundIds = new Set(allExistingHosts.map((h: any) => h.host_id));
       const notFoundIds = idsToVerify.filter(id => !foundIds.has(id));
       const alreadyVerifiedIds = allExistingHosts
-        .filter(h => h.estado === 'Verified')
-        .map(h => h.host_id);
+        .filter((h: any) => h.estado === 'Verified')
+        .map((h: any) => h.host_id);
       const toUpdateIds = allExistingHosts
-        .filter(h => h.estado !== 'Verified')
-        .map(h => h.host_id);
+        .filter((h: any) => h.estado !== 'Verified')
+        .map((h: any) => h.host_id);
 
       // Update ONLY the hosts from the provided list that need verification
       if (toUpdateIds.length > 0) {
-        // Update in batches as well
         for (let i = 0; i < toUpdateIds.length; i += batchSize) {
           const batch = toUpdateIds.slice(i, i + batchSize);
           const { error: updateError } = await supabase
@@ -289,22 +315,26 @@ export default function AccountVerification() {
 
           if (updateError) throw updateError;
         }
-
-        // Log the bulk verification action
-        await ActivityLogger.bulkVerification(
-          user, 
-          toUpdateIds.length, 
-          notFoundIds.length, 
-          alreadyVerifiedIds.length,
-          [...toUpdateIds, ...alreadyVerifiedIds]
-        );
       }
+
+      // Always log the bulk verification action
+      await ActivityLogger.bulkVerification(
+        user, 
+        toUpdateIds.length, 
+        notFoundIds.length, 
+        alreadyVerifiedIds.length,
+        [...toUpdateIds, ...alreadyVerifiedIds]
+      );
 
       // Set the results
       setBulkResult({
         success: toUpdateIds,
         notFound: notFoundIds,
-        alreadyVerified: alreadyVerifiedIds
+        alreadyVerified: alreadyVerifiedIds,
+        totalValidIds: parsed.validIds.length,
+        duplicatesRemoved: parsed.duplicatesRemoved,
+        invalidTokens: parsed.invalidTokens,
+        verificationDate: currentDate,
       });
 
       // Refresh the hosts list
@@ -322,12 +352,121 @@ export default function AccountVerification() {
     setBulkIds('');
     setBulkValidationError(null);
     setBulkResult(null);
+    setCreateMissingResult(null);
+  };
+
+  // Download not-found IDs as a TXT file (client-side)
+  const downloadNotFoundTxt = () => {
+    if (!bulkResult || bulkResult.notFound.length === 0) return;
+    const date = bulkResult.verificationDate;
+    const content =
+      `NEW HOST MANAGER\n` +
+      `IDs NOT FOUND\n` +
+      `Verification date: ${date}\n\n` +
+      `Total IDs not found: ${bulkResult.notFound.length}\n\n` +
+      `${bulkResult.notFound.join('\n')}\n`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `not-found-host-ids-${date}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Create minimal host records for not-found IDs (requires explicit confirmation)
+  const handleCreateMissingRecords = async () => {
+    if (!bulkResult || bulkResult.notFound.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Se crearán ${bulkResult.notFound.length} registro(s) minimal(es) para los IDs no encontrados.\n\n` +
+      `Cada registro tendrá:\n` +
+      `  • estado = "Verified"\n` +
+      `  • ver_date = "${bulkResult.verificationDate}"\n` +
+      `  • comision = "Pending"\n` +
+      `  • real = false\n\n` +
+      `No se asignará reclutador, nombre, teléfono ni capturas.\n\n` +
+      `¿Deseas continuar?`
+    );
+    if (!confirmed) return;
+
+    setCreatingMissing(true);
+    const errors: string[] = [];
+    let created = 0;
+    let skipped = 0;
+
+    try {
+      const notFoundIds = bulkResult.notFound;
+      const verificationDate = bulkResult.verificationDate;
+      const batchSize = 100;
+
+      // Re-check each ID against Supabase to avoid duplicates from concurrent processes
+      let stillMissing: string[] = [];
+      for (let i = 0; i < notFoundIds.length; i += batchSize) {
+        const batch = notFoundIds.slice(i, i + batchSize);
+        const { data: existing, error: checkError } = await supabase
+          .from('hosts')
+          .select('host_id')
+          .in('host_id', batch);
+
+        if (checkError) throw checkError;
+        const existingIds = new Set((existing || []).map((h: any) => h.host_id));
+        for (const id of batch) {
+          if (!existingIds.has(id)) {
+            stillMissing.push(id);
+          } else {
+            skipped++;
+          }
+        }
+      }
+
+      // Insert minimal records for IDs still missing
+      for (const hostId of stillMissing) {
+        const minimalRecord = {
+          host_id: hostId,
+          estado: 'Verified',
+          ver_date: verificationDate,
+          comision: 'Pending',
+          real: false,
+        };
+
+        const { error: insertError } = await supabase
+          .from('hosts')
+          .insert([minimalRecord]);
+
+        if (insertError) {
+          errors.push(`${hostId}: ${insertError.message}`);
+        } else {
+          created++;
+        }
+      }
+
+      // Log creation of missing host records as a separate auditable action
+      await ActivityLogger.log(
+        user,
+        'create' as any,
+        `Created ${created} missing host record(s) via verification (IDs: ${stillMissing.slice(0, 20).join(', ')}${stillMissing.length > 20 ? '...' : ''})`,
+        'host',
+        undefined,
+        { createdCount: created, skippedCount: skipped, hostIds: stillMissing, source: 'verification_missing' }
+      );
+
+      setCreateMissingResult({ created, skipped, errors });
+
+      // Refresh the hosts list
+      fetchHosts();
+    } catch (error) {
+      console.error('Create missing records error:', error);
+      setCreateMissingResult({ created, skipped, errors: [...errors, (error as any)?.message || 'Unknown error'] });
+    } finally {
+      setCreatingMissing(false);
+    }
   };
 
   // Get detected IDs count for display
-  const detectedIds = parseIds(bulkIds);
-  const rawIdsCount = bulkIds.trim() ? bulkIds.split(/[,\n\r\t;|]+/).map(id => id.trim()).filter(id => id.length > 0).length : 0;
-  const duplicatesCount = rawIdsCount - detectedIds.length;
+  const parsedPreview = parseAndNormalizeIds(bulkIds);
 
   return (
     <div className="space-y-6">
@@ -599,12 +738,13 @@ export default function AccountVerification() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-semibold text-blue-900 mb-2">Instrucciones de Verificación Masiva</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Pega o escribe los Host IDs en cualquier formato: uno por línea, separados por comas, espacios, tabulaciones, etc.</li>
-                  <li>• El sistema detectará automáticamente los IDs sin importar el formato</li>
-                  <li>• Los IDs duplicados serán removidos automáticamente</li>
+                  <li>• Pega o escribe los Host IDs en cualquier formato: uno por línea, separados por comas, espacios, tabulaciones, puntos y coma, etc.</li>
+                  <li>• Los IDs deben ser numéricos — los tokens no numéricos se reportarán como inválidos</li>
+                  <li>• Los IDs duplicados serán removidos automáticamente conservando el primer orden de aparición</li>
                   <li>• El sistema actualizará el estado a "Verified" y establecerá la fecha de verificación de hoy</li>
                   <li>• <strong>Solo se actualizarán los IDs proporcionados</strong> — ningún otro registro será modificado</li>
-                  <li>• Los IDs que no se encuentren en el sistema se listarán por separado</li>
+                  <li>• Los hosts ya verificados conservarán su fecha de verificación original sin cambios</li>
+                  <li>• Los IDs no encontrados se listarán por separado y podrán descargarse como TXT</li>
                 </ul>
               </div>
 
@@ -630,7 +770,7 @@ export default function AccountVerification() {
                   <textarea
                     value={bulkIds}
                     onChange={(e) => handleBulkIdsChange(e.target.value)}
-                    placeholder={"Pega los IDs en cualquier formato, por ejemplo:\n\nABC123\nDEF456\nGHI789\n\no: ABC123, DEF456, GHI789\n\no: ABC123 DEF456 GHI789"}
+                    placeholder={"Pega los IDs en cualquier formato, por ejemplo:\n\n3216497\n321321321\n98456321\n\no: 3216497, 321321321, 98456321\n\no: 3216497 321321321 98456321"}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[160px] font-mono text-sm ${
                       bulkValidationError ? 'border-red-300 bg-red-50' : 'border-gray-300'
                     }`}
@@ -643,13 +783,18 @@ export default function AccountVerification() {
                     </p>
                   )}
                   {bulkIds.trim() && !bulkValidationError && (
-                    <div className="mt-2 flex items-center gap-3">
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium text-gray-900">{detectedIds.length}</span> ID(s) detectado(s)
+                        <span className="font-medium text-gray-900">{parsedPreview.validIds.length}</span> ID(s) numérico(s) válido(s)
                       </p>
-                      {duplicatesCount > 0 && (
+                      {parsedPreview.duplicatesRemoved > 0 && (
                         <p className="text-sm text-amber-600">
-                          <span className="font-medium">{duplicatesCount}</span> duplicado(s) serán removido(s)
+                          <span className="font-medium">{parsedPreview.duplicatesRemoved}</span> duplicado(s) removido(s)
+                        </p>
+                      )}
+                      {parsedPreview.invalidTokens.length > 0 && (
+                        <p className="text-sm text-red-600">
+                          <span className="font-medium">{parsedPreview.invalidTokens.length}</span> token(s) inválido(s): {parsedPreview.invalidTokens.join(', ')}
                         </p>
                       )}
                     </div>
@@ -689,6 +834,28 @@ export default function AccountVerification() {
                 <div className="space-y-4">
                   <h3 className="font-semibold text-gray-900 text-lg">Resultados de Verificación</h3>
                   
+                  {/* Invalid Tokens */}
+                  {bulkResult.invalidTokens.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <XCircle className="w-5 h-5 text-red-600" />
+                        <h4 className="font-semibold text-red-800">
+                          Tokens Inválidos ({bulkResult.invalidTokens.length})
+                        </h4>
+                      </div>
+                      <p className="text-sm text-red-700 mb-3">
+                        Los siguientes tokens no son numéricos y fueron ignorados:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {bulkResult.invalidTokens.map(token => (
+                          <span key={token} className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-mono">
+                            {token}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Success */}
                   {bulkResult.success.length > 0 && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -718,7 +885,7 @@ export default function AccountVerification() {
                         </h4>
                       </div>
                       <p className="text-sm text-blue-700 mb-3">
-                        Estos IDs ya estaban verificados y no necesitaron actualización:
+                        Estos IDs ya estaban verificados y su fecha de verificación original se conservó sin cambios:
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {bulkResult.alreadyVerified.map(id => (
@@ -740,22 +907,79 @@ export default function AccountVerification() {
                         </h4>
                       </div>
                       <p className="text-sm text-amber-700 mb-3">
-                        Los siguientes IDs no fueron encontrados en el sistema. Por favor verifica que estos IDs estén registrados:
+                        Los siguientes IDs no fueron encontrados en el sistema:
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 mb-4">
                         {bulkResult.notFound.map(id => (
                           <span key={id} className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-mono">
                             {id}
                           </span>
                         ))}
                       </div>
+                      {/* Download and Create Missing actions */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={downloadNotFoundTxt}
+                          disabled={creatingMissing}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download Not Found IDs (.txt)
+                        </button>
+                        <button
+                          onClick={handleCreateMissingRecords}
+                          disabled={creatingMissing}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {creatingMissing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Creando...
+                            </>
+                          ) : (
+                            <>
+                              <PlusCircle className="w-4 h-4" />
+                              Create Missing Host Records
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {/* Create missing result */}
+                      {createMissingResult && (
+                        <div className={`mt-3 rounded-lg p-3 text-sm ${
+                          createMissingResult.errors.length > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <p className={createMissingResult.errors.length > 0 ? 'text-red-800' : 'text-green-800'}>
+                            <span className="font-medium">{createMissingResult.created}</span> registro(s) creado(s), <span className="font-medium">{createMissingResult.skipped}</span> omitido(s) (ya existían).
+                          </p>
+                          {createMissingResult.errors.length > 0 && (
+                            <ul className="mt-2 list-disc list-inside text-red-700">
+                              {createMissingResult.errors.map((err, i) => (
+                                <li key={i}>{err}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Summary */}
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <h4 className="font-semibold text-gray-800 mb-3">Resumen</h4>
-                    <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
+                      <div>
+                        <p className="text-2xl font-bold text-gray-900">{bulkResult.totalValidIds}</p>
+                        <p className="text-sm text-gray-500">IDs Válidos Únicos</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-amber-600">{bulkResult.duplicatesRemoved}</p>
+                        <p className="text-sm text-gray-500">Duplicados Removidos</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-red-600">{bulkResult.invalidTokens.length}</p>
+                        <p className="text-sm text-gray-500">Tokens Inválidos</p>
+                      </div>
                       <div>
                         <p className="text-2xl font-bold text-green-600">{bulkResult.success.length}</p>
                         <p className="text-sm text-gray-500">Nuevos Verificados</p>
