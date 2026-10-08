@@ -135,17 +135,21 @@ export default function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) 
 
   // Registration trends over time
   const registrationTrends = useMemo(() => {
-    const grouped: Record<string, number> = {};
+    const grouped: Record<string, { timestamp: number; count: number }> = {};
     
     filteredHosts.forEach(host => {
       const date = new Date(host.reg_date || host.created_at);
       const key = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      grouped[key] = (grouped[key] || 0) + 1;
+      if (!grouped[key]) {
+        grouped[key] = { timestamp: date.getTime(), count: 0 };
+      }
+      grouped[key].count++;
     });
 
     return Object.entries(grouped)
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp)
       .slice(-14)
-      .map(([date, count]) => ({ date, registrations: count }));
+      .map(([date, data]) => ({ date, registrations: data.count }));
   }, [filteredHosts]);
 
   // Verification rates by recruiter
@@ -175,14 +179,14 @@ export default function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) 
 
   // Commission payment history with proper commission amounts
   const commissionHistory = useMemo(() => {
-    const monthlyData: Record<string, { paid: number; pending: number; paidAmount: number; pendingAmount: number }> = {};
+    const monthlyData: Record<string, { timestamp: number; paid: number; pending: number; paidAmount: number; pendingAmount: number }> = {};
 
     filteredHosts.filter(h => h.estado === 'Verified' && h.real === true).forEach(host => {
       const date = new Date(host.ver_date || host.created_at);
       const key = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       
       if (!monthlyData[key]) {
-        monthlyData[key] = { paid: 0, pending: 0, paidAmount: 0, pendingAmount: 0 };
+        monthlyData[key] = { timestamp: date.getTime(), paid: 0, pending: 0, paidAmount: 0, pendingAmount: 0 };
       }
       
       // Get the proper commission amount for this host's recruiter
@@ -198,8 +202,9 @@ export default function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) 
     });
 
     return Object.entries(monthlyData)
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp)
       .slice(-6)
-      .map(([month, data]) => ({ month, ...data }));
+      .map(([month, { timestamp, ...data }]) => ({ month, ...data }));
   }, [filteredHosts, recruiterSettings]);
 
 

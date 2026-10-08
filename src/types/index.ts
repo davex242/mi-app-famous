@@ -33,6 +33,7 @@ export interface AppUser {
   is_active: boolean;
   created_at: string;
   last_login: string;
+  password_hash: string;
 }
 
 

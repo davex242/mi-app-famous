@@ -6,6 +6,7 @@ import {
   Trash2, 
   Shield, 
   Eye, 
+  EyeOff,
   Pencil,
   AlertTriangle,
   RefreshCw,
@@ -49,6 +50,7 @@ export default function UserManagement() {
   const [passwordResetSuccess, setPasswordResetSuccess] = useState(false);
   const [sendEmailNotification, setSendEmailNotification] = useState(true);
   const [copiedPassword, setCopiedPassword] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
 
   const passwordStrength = checkPasswordStrength(manualPassword);
 
@@ -277,7 +279,17 @@ export default function UserManagement() {
     return <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border ${styles[role] || styles.readonly}`}>{icons[role]}{labels[role] || role}</span>;
   };
 
-  const getRoleColor = (role: string) => { 
+  const togglePasswordVisibility = (userId: string) => {
+    const newVisible = new Set(visiblePasswords);
+    if (newVisible.has(userId)) {
+      newVisible.delete(userId);
+    } else {
+      newVisible.add(userId);
+    }
+    setVisiblePasswords(newVisible);
+  };
+
+  const getRoleColor = (role: string) => {
     switch (role) { 
       case 'superadmin': return 'text-amber-700 bg-amber-50'; 
       case 'subadmin': return 'text-purple-700 bg-purple-50'; 
@@ -366,6 +378,7 @@ export default function UserManagement() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">User</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Password</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Change Role</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
@@ -374,11 +387,25 @@ export default function UserManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {loading ? (<tr><td colSpan={6} className="px-6 py-12 text-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></td></tr>
-              ) : users.length === 0 ? (<tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">No users found</td></tr>
+              {loading ? (<tr><td colSpan={7} className="px-6 py-12 text-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" /></td></tr>
+              ) : users.length === 0 ? (<tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">No users found</td></tr>
               ) : (users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4"><div><p className="font-medium text-gray-900">{user.name}</p><p className="text-sm text-gray-500">{user.email}</p></div></td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-gray-600">
+                        {visiblePasswords.has(user.id) ? (user.password_hash || '—') : '••••••••'}
+                      </span>
+                      <button
+                        onClick={() => togglePasswordVisibility(user.id)}
+                        className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                        title={visiblePasswords.has(user.id) ? 'Hide password' : 'Show password'}
+                      >
+                        {visiblePasswords.has(user.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">{getRoleBadge(user.role)}</td>
                   <td className="px-6 py-4">
                     <div className="relative">

@@ -7,7 +7,7 @@ import Reports from './Reports';
 import UserManagement from './UserManagement';
 import LoginModal from './LoginModal';
 import ImportData from './ImportData';
-import BuyCredits from './BuyCredits';
+
 import CommissionManagement from './CommissionManagement';
 import ActivityLogs from './ActivityLogs';
 import AccountVerification from './AccountVerification';
@@ -57,8 +57,7 @@ function AppContent() {
         return <UserManagement />;
       case 'import':
         return <ImportData onBack={() => setActiveView('dashboard')} onComplete={() => setActiveView('dashboard')} />;
-      case 'credits':
-        return <BuyCredits onBack={() => setActiveView('dashboard')} />;
+
       case 'commissions':
         return <CommissionManagement onBack={() => setActiveView('dashboard')} />;
       case 'activity':

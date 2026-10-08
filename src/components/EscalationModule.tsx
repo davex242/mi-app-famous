@@ -28,6 +28,7 @@ export default function EscalationModule() {
   const [generating, setGenerating] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportContent, setReportContent] = useState('');
+  const [whatsappSent, setWhatsappSent] = useState(false);
 
   // Calculate days since registration
   const calculateDays = (regDate: string): number => {
@@ -113,14 +114,9 @@ export default function EscalationModule() {
     content += `Total Accounts: ${selectedHosts.length}\n`;
     content += `${'='.repeat(50)}\n\n`;
 
+    content += `ID LIST:\n`;
     selectedHosts.forEach((host, index) => {
-      const days = calculateDays(host.reg_date);
-      content += `${index + 1}. ${host.host_name}\n`;
-      content += `   Host ID: ${host.host_id}\n`;
-      content += `   Status: ${host.estado}\n`;
-      content += `   Days Pending: ${days}\n`;
-      content += `   Recruiter: ${host.reclutador}\n`;
-      content += `\n`;
+      content += `${index + 1}. ${host.host_id} - ${host.host_name}\n`;
     });
 
     return content;
@@ -134,14 +130,89 @@ export default function EscalationModule() {
     }
     const content = generateReportContent();
     setReportContent(content);
+    setWhatsappSent(false);
     setShowReportModal(true);
   };
 
-  // Mark selected as escalated and send via WhatsApp
-  const handleShareWhatsApp = async () => {
+  // Send via WhatsApp — does NOT mark as escalated yet
+  const handleShareWhatsApp = () => {
+    const message = encodeURIComponent(reportContent);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+    setWhatsappSent(true);
+  };
+
+  // Download as TXT — does NOT mark as escalated
+  const handleDownloadTxt = () => {
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `escalation_report_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download as PDF — does NOT mark as escalated
+  const handleDownloadPdf = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const selectedHosts = hosts.filter(h => selectedIds.has(h.id));
+      const now = new Date().toLocaleString();
+      
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Escalation Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .meta { color: #666; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background-color: #f5f5f5; }
+            .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            .pending { background-color: #fef3c7; color: #92400e; }
+          </style>
+        </head>
+        <body>
+          <h1>Escalation Report</h1>
+          <div class="meta">
+            <p>Generated: ${now}</p>
+            <p>Total Accounts: ${selectedHosts.length}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Host ID</th>
+                <th>Host Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedHosts.map((host, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${host.host_id}</td>
+                  <td>${host.host_name}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  // Mark selected as escalated — after WhatsApp has been sent
+  const handleMarkEscalated = async () => {
     setGenerating(true);
     try {
-      // Mark all selected hosts as escalated
       const { error } = await supabase
         .from('hosts')
         .update({ escalado: true, updated_at: new Date().toISOString() })
@@ -149,144 +220,15 @@ export default function EscalationModule() {
 
       if (error) throw error;
 
-      // Log the escalation
       await ActivityLogger.escalation(user, Array.from(selectedIds), 'WhatsApp');
 
-      // Generate WhatsApp message
-      const message = encodeURIComponent(reportContent);
-      window.open(`https://wa.me/?text=${message}`, '_blank');
-
-      // Refresh the list
       setShowReportModal(false);
       setSelectedIds(new Set());
+      setWhatsappSent(false);
       fetchOverdueHosts();
     } catch (error) {
       console.error('Escalation error:', error);
-      alert('Failed to process escalation');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Download as TXT
-  const handleDownloadTxt = async () => {
-    setGenerating(true);
-    try {
-      // Mark all selected hosts as escalated
-      const { error } = await supabase
-        .from('hosts')
-        .update({ escalado: true, updated_at: new Date().toISOString() })
-        .in('id', Array.from(selectedIds));
-
-      if (error) throw error;
-
-      // Log the escalation
-      await ActivityLogger.escalation(user, Array.from(selectedIds), 'TXT Download');
-
-      // Download file
-      const blob = new Blob([reportContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `escalation_report_${new Date().toISOString().split('T')[0]}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Refresh the list
-      setShowReportModal(false);
-      setSelectedIds(new Set());
-      fetchOverdueHosts();
-    } catch (error) {
-      console.error('Download error:', error);
-      alert('Failed to process download');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Download as PDF (simple implementation using print)
-  const handleDownloadPdf = async () => {
-    setGenerating(true);
-    try {
-      // Mark all selected hosts as escalated
-      const { error } = await supabase
-        .from('hosts')
-        .update({ escalado: true, updated_at: new Date().toISOString() })
-        .in('id', Array.from(selectedIds));
-
-      if (error) throw error;
-
-      // Log the escalation
-      await ActivityLogger.escalation(user, Array.from(selectedIds), 'PDF Download');
-
-      // Create a printable window
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const selectedHosts = hosts.filter(h => selectedIds.has(h.id));
-        const now = new Date().toLocaleString();
-        
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Escalation Report</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 20px; }
-              h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }
-              .meta { color: #666; margin-bottom: 20px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-              th { background-color: #f5f5f5; }
-              .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-              .pending { background-color: #fef3c7; color: #92400e; }
-            </style>
-          </head>
-          <body>
-            <h1>Escalation Report</h1>
-            <div class="meta">
-              <p>Generated: ${now}</p>
-              <p>Total Accounts: ${selectedHosts.length}</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Host Name</th>
-                  <th>Host ID</th>
-                  <th>Status</th>
-                  <th>Days Pending</th>
-                  <th>Recruiter</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${selectedHosts.map((host, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${host.host_name}</td>
-                    <td>${host.host_id}</td>
-                    <td><span class="status pending">${host.estado}</span></td>
-                    <td>${calculateDays(host.reg_date)} days</td>
-                    <td>${host.reclutador}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
-      }
-
-      // Refresh the list
-      setShowReportModal(false);
-      setSelectedIds(new Set());
-      fetchOverdueHosts();
-    } catch (error) {
-      console.error('PDF error:', error);
-      alert('Failed to generate PDF');
+      alert('Failed to mark as escalated');
     } finally {
       setGenerating(false);
     }
@@ -508,34 +450,52 @@ export default function EscalationModule() {
 
             <div className="p-4 border-t border-gray-200 bg-gray-50">
               <p className="text-sm text-gray-600 mb-4">
-                Share this report via your preferred method. Selected accounts will be marked as escalated.
+                {whatsappSent
+                  ? 'WhatsApp sent. Now mark these accounts as escalated to remove them from the overdue list.'
+                  : 'Send this report via WhatsApp or download it. After sending, you can mark the accounts as escalated.'}
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={handleShareWhatsApp}
-                  disabled={generating}
-                  className="flex-1 min-w-[140px] px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 min-w-[140px] px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  WhatsApp
+                  {whatsappSent ? 'Resend WhatsApp' : 'Send via WhatsApp'}
                 </button>
                 <button
                   onClick={handleDownloadTxt}
-                  disabled={generating}
-                  className="flex-1 min-w-[140px] px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 min-w-[140px] px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <Download className="w-4 h-4" />
                   Download TXT
                 </button>
                 <button
                   onClick={handleDownloadPdf}
-                  disabled={generating}
-                  className="flex-1 min-w-[140px] px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 min-w-[140px] px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <FileText className="w-4 h-4" />
                   Download PDF
                 </button>
               </div>
+              {whatsappSent && (
+                <button
+                  onClick={handleMarkEscalated}
+                  disabled={generating}
+                  className="w-full mt-3 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 font-semibold"
+                >
+                  {generating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Marking...
+                    </>
+                  ) : (
+                    <>
+                      <CheckSquare className="w-4 h-4" />
+                      Mark as Escalated ({selectedIds.size})
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

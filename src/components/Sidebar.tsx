@@ -9,7 +9,6 @@ import {
   Menu,
   X,
   Upload,
-  CreditCard,
   DollarSign,
   History,
   ShieldCheck,
@@ -53,7 +52,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onToggle }: 
     { id: 'activity', label: 'Activity Logs', icon: History },
     { id: 'audit-trail', label: 'Audit Trail', icon: FileText },
     { id: 'reports', label: 'Reports', icon: FileText },
-    { id: 'credits', label: 'Comprar Créditos', icon: CreditCard },
+
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'deactivation-requests', label: 'Deactivation Requests', icon: UserX, superAdminOnly: true },
   ];
