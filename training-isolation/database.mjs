@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createHash } from 'node:crypto';
 
-const localTables = `
+const legacyLocalTables = `
       create table training_private.local_credentials (
         auth_user_id uuid primary key references auth.users(id), username text not null unique,
         password_salt text not null, password_digest text not null
@@ -20,6 +20,24 @@ const localTables = `
       alter table training_private.local_material_content enable row level security;
       revoke all on training_private.local_material_content from public,anon,authenticated;
 `;
+
+// Only the exact preceding local schema can be copied forward. This does not
+// accept hosted connections or run DDL against the source store.
+export const PRE_EVIDENCE_SCHEMA='37ea1ef49f2cb52acf2efdbd1a5d1424c62a4135b4302be1905460c2beeaaf2d';
+const evidenceTables = `
+      create table training_private.local_evidence_content (
+        evidence_id uuid primary key references public.training_evidence(id), body text not null
+      );
+      alter table training_private.local_evidence_content enable row level security;
+      revoke all on training_private.local_evidence_content from public,anon,authenticated;
+`;
+const localTables=legacyLocalTables+evidenceTables;
+export async function upgradePreEvidenceCopy(tx) {
+  const s=await schemaSources();
+  const previous=createHash('sha256').update(s.bootstrap+s.sql+legacyLocalTables).digest('hex');
+  if(previous!==PRE_EVIDENCE_SCHEMA)throw Error('Unsupported local copy upgrade');
+  await tx.exec(evidenceTables);
+}
 
 async function schemaSources() {
   const [bootstrap,sql]=await Promise.all([

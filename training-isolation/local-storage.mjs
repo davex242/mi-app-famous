@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { randomUUID,createHash } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
-import { initializeSandboxSchema,sandboxSchemaFingerprint } from './database.mjs';
+import { initializeSandboxSchema,sandboxSchemaFingerprint,PRE_EVIDENCE_SCHEMA,upgradePreEvidenceCopy } from './database.mjs';
 
 export const LOCAL_DATA_ROOT=fileURLToPath(new URL('_local-data/',import.meta.url));
 const application='host-training-isolation',format=2;
@@ -25,19 +25,8 @@ function unpack(e,fingerprint){
 async function envelope(db,manifest){const dump=Buffer.from(await (await db.dumpDataDir('gzip')).arrayBuffer());return {application,format,manifest,dump_sha256:digest(dump),dump_base64:dump.toString('base64'),created_at:new Date().toISOString()};}
 function validateManifest(m,fingerprint){if(m.application!==application||m.format!==format||m.schema_sha256!==fingerprint||m.state!=='ready'||typeof m.instance_id!=='string')throw Error('Unrecognized or incompatible local sandbox; no reset or migration performed');}
 
-async function openStore(store,{create=false,restore=null,beforeCheckpoint}={}) {
-  name(store);await directory(LOCAL_DATA_ROOT);
-  const lockRoot=join(LOCAL_DATA_ROOT,'_locks');await directory(lockRoot);
-  const dir=join(LOCAL_DATA_ROOT,store),marker=join(dir,'sandbox.json'),lock=join(lockRoot,store);
-  if(!create&&!restore){try{await lstat(dir);}catch(e){if(e.code==='ENOENT')throw Error('Local sandbox does not exist');throw e;}}
-  let fresh=false;
-  try{await mkdir(dir,{mode:0o700});fresh=true;}catch(e){if(e.code!=='EEXIST')throw e;}
-  const stat=await lstat(dir);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('Local store symlinks are not allowed');
-  if(fresh&&!create&&!restore)throw Error('Local sandbox does not exist');
-  if(restore&&!fresh)throw Error('Restore requires a new store; existing data is never overwritten');
-  const fingerprint=await sandboxSchemaFingerprint();
-  let manifest;
-  if(!fresh)manifest=await json(marker); // Never open unmarked PostgreSQL data.
+async function acquireLease(store,lockRoot) {
+  const lock=join(lockRoot,store);
   // Keep no Node file descriptor open across a WASM database lifetime.
   // Atomic directory creation provides the exclusive, cross-process lease.
   try{await mkdir(lock,{mode:0o700});}catch(e){
@@ -55,12 +44,30 @@ async function openStore(store,{create=false,restore=null,beforeCheckpoint}={}) 
   }
   const nonce=randomUUID();
   const ownerFile=join(lock,'owner.json');
-  let db,closed=false;
   async function release(){
     try{if((await json(ownerFile)).nonce===nonce){await unlink(ownerFile);await rmdir(lock);releasedLeases.set(nonce,store);}}catch(e){if(e.code!=='ENOENT')throw e;}
   }
+  try{await exclusiveWrite(ownerFile,JSON.stringify({pid:process.pid,nonce,created_at:new Date().toISOString()}));}
+  catch(e){await release();throw e;}
+  return release;
+}
+
+async function openStore(store,{create=false,restore=null,beforeCheckpoint}={}) {
+  name(store);await directory(LOCAL_DATA_ROOT);
+  const lockRoot=join(LOCAL_DATA_ROOT,'_locks');await directory(lockRoot);
+  const dir=join(LOCAL_DATA_ROOT,store),marker=join(dir,'sandbox.json');
+  if(!create&&!restore){try{await lstat(dir);}catch(e){if(e.code==='ENOENT')throw Error('Local sandbox does not exist');throw e;}}
+  let fresh=false;
+  try{await mkdir(dir,{mode:0o700});fresh=true;}catch(e){if(e.code!=='EEXIST')throw e;}
+  const stat=await lstat(dir);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('Local store symlinks are not allowed');
+  if(fresh&&!create&&!restore)throw Error('Local sandbox does not exist');
+  if(restore&&!fresh)throw Error('Restore requires a new store; existing data is never overwritten');
+  const fingerprint=await sandboxSchemaFingerprint();
+  let manifest;
+  if(!fresh)manifest=await json(marker); // Never open unmarked PostgreSQL data.
+  const release=await acquireLease(store,lockRoot);
+  let db,closed=false;
   try{
-    await exclusiveWrite(ownerFile,JSON.stringify({pid:process.pid,nonce,created_at:new Date().toISOString()}));
     if(!fresh)validateManifest(manifest,fingerprint);
     else {
       manifest={application,format,schema_sha256:fingerprint,instance_id:randomUUID(),state:'initializing',created_at:new Date().toISOString()};
@@ -82,9 +89,10 @@ async function openStore(store,{create=false,restore=null,beforeCheckpoint}={}) 
       await db.query('insert into training_private.local_runtime_metadata(instance_id,schema_sha256) values($1,$2)',[manifest.instance_id,fingerprint]);
     }else{
       const identity=(await db.query('select * from training_private.local_runtime_metadata where singleton')).rows[0];
-      if(!identity||identity.instance_id!==(restore?restore.manifest.instance_id:manifest.instance_id)||identity.schema_sha256!==fingerprint)throw Error('Local database identity mismatch; data preserved');
+      if(!identity||identity.instance_id!==(restore?restore.manifest.instance_id:manifest.instance_id)||identity.schema_sha256!==(restore?.upgrade?PRE_EVIDENCE_SCHEMA:fingerprint))throw Error('Local database identity mismatch; data preserved');
       if(restore)await db.transaction(async tx=>{
-        await tx.query('update training_private.local_runtime_metadata set instance_id=$1 where singleton',[manifest.instance_id]);
+        if(restore.upgrade)await upgradePreEvidenceCopy(tx);
+        await tx.query('update training_private.local_runtime_metadata set instance_id=$1,schema_sha256=$2 where singleton',[manifest.instance_id,fingerprint]);
         // A restored copy must never reactivate a previously revoked credential.
         await tx.exec('update training_private.local_sessions set revoked_at=now(); update training_private.training_exam_tokens set revoked_at=now();');
       });
@@ -143,4 +151,24 @@ export async function restoreLocalSandbox(backupId,targetStore) {
   const dump=unpack(e,fingerprint);
   const local=await openStore(targetStore,{restore:{manifest:e.manifest,dump}});
   try{return {store:targetStore,restored:true};}finally{await local.close();}
+}
+
+// Explicit offline copy only: the source marker and snapshot are never written.
+export async function upgradeLocalSandbox(sourceStore,targetStore) {
+  name(sourceStore);name(targetStore);
+  if(sourceStore===targetStore)throw Error('Upgrade requires a different new store');
+  await directory(LOCAL_DATA_ROOT);
+  const source=join(LOCAL_DATA_ROOT,sourceStore),stat=await lstat(source);
+  if(!stat.isDirectory()||stat.isSymbolicLink())throw Error('Invalid local upgrade source');
+  const locks=join(LOCAL_DATA_ROOT,'_locks');await directory(locks);
+  const release=await acquireLease(sourceStore,locks);
+  try {
+    const manifest=await json(join(source,'sandbox.json'));
+    validateManifest(manifest,PRE_EVIDENCE_SCHEMA);
+    const e=await json(join(source,'database.json')),dump=unpack(e,PRE_EVIDENCE_SCHEMA);
+    if(e.manifest.instance_id!==manifest.instance_id)throw Error('Source snapshot identity mismatch');
+    const local=await openStore(targetStore,{restore:{manifest,dump,upgrade:true}});
+    try{return {store:targetStore,upgraded:true,source_preserved:true};}
+    finally{await local.close();}
+  }finally{await release();}
 }

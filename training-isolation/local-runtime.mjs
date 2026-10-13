@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { openPersistentSandbox,backupLocalSandbox,restoreLocalSandbox } from './local-storage.mjs';
+import { openPersistentSandbox,backupLocalSandbox,restoreLocalSandbox,upgradeLocalSandbox } from './local-storage.mjs';
 import { createTrainingService,provisionSyntheticUser } from './service.mjs';
 import { seedDemoProgram } from './demo-fixtures.mjs';
 import { createSandboxHttpServer } from './server.mjs';
@@ -35,7 +35,7 @@ export async function startPersistentSandbox(store='demo',password,port=4317) {
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const [command='start',store='demo',target,...extra]=process.argv.slice(2);
   try{
-    if(extra.length || (command!=='restore'&&target!==undefined))throw Error('Unexpected command arguments');
+    if(extra.length || (!['restore','upgrade'].includes(command)&&target!==undefined))throw Error('Unexpected command arguments');
     if(command==='start'){
       const runtime=await startPersistentSandbox(store,process.env.TRAINING_DEMO_PASSWORD);
       delete process.env.TRAINING_DEMO_PASSWORD;
@@ -45,6 +45,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
       for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await runtime.close();});
     }else if(command==='backup')console.log(await backupLocalSandbox(store));
     else if(command==='restore')console.log(await restoreLocalSandbox(store,target));
-    else throw Error('Use start, backup, or restore');
+    else if(command==='upgrade')console.log(await upgradeLocalSandbox(store,target));
+    else throw Error('Use start, backup, restore, or upgrade');
   }catch(e){delete process.env.TRAINING_DEMO_PASSWORD;console.error(e.message);process.exitCode=1;}
 }

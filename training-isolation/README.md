@@ -342,7 +342,24 @@ npm run start:persistent --prefix training-isolation -- demo-recuperado
 
 Sustituye backup-ID-DEVUELTO por el ID real. El comando solo lee respaldos de ese directorio privado, verifica formato, huella y checksum y nunca sobrescribe un almacén existente. La copia conserva los resultados y revisiones del momento del respaldo, con identidad propia; el original permanece intacto. Se revocan todas las sesiones y enlaces del quiz en la copia para que una restauración no reactive accesos antiguos. Las cuentas mantienen su contraseña original; inicia sesión otra vez y emite enlaces nuevos cuando corresponda.
 
-El almacenamiento local depende del disco y de ese entorno: no es persistencia cloud, una URL pública ni disponibilidad garantizada. Debe ejecutarse en un disco duradero para conservar trabajo real de pruebas; esta sesión verificó con almacenes sintéticos temporales que se retiraron al terminar. Una futura versión con esquema diferente se detiene por incompatibilidad y requiere un procedimiento explícito de actualización; no hace migraciones silenciosas.
+El almacenamiento local depende del disco y de ese entorno: no es persistencia cloud, una URL pública ni disponibilidad garantizada. Debe ejecutarse en un disco duradero para conservar trabajo real de pruebas; esta sesión verificó con almacenes sintéticos temporales que se retiraron al terminar. Una versión con esquema diferente se detiene por incompatibilidad. La actualización explícita descrita abajo admite únicamente la huella previa conocida; no hace migraciones silenciosas.
+
+### Copia de actualización para preparar evidencias adjuntas
+
+Esta versión incorpora una tabla privada vacía para archivos de evidencias, con clave foránea al ID de evidencia, RLS y sin permisos para public/anon/authenticated. **Todavía no habilita subidas en API/interfaz**; el contenido no se incorpora al catálogo ni a eventos públicos. La huella local del esquema cambia, por lo que el arranque normal rechaza almacenes anteriores sin modificarlos.
+
+Para conservar una prueba local de la versión anterior, detén su servidor y ejecuta:
+
+```sh
+npm run upgrade:local --prefix training-isolation -- demo demo-con-evidencias
+npm run start:persistent --prefix training-isolation -- demo-con-evidencias
+```
+
+`demo` debe ser un almacén de la versión anterior (huella `37ea1ef49f2cb52acf2efdbd1a5d1424c62a4135b4302be1905460c2beeaaf2d`); el destino debe tener otro nombre y no existir. No se aceptan rutas ni conexiones remotas. El comando mantiene un bloqueo exclusivo del origen, verifica formato/huella/checksum e identidad externa e interna, carga la instantánea en una nueva base en memoria y aplica la nueva tabla **solo a la copia**. Tabla, nueva identidad, huella y revocación de accesos se guardan en una transacción antes de escribir la instantánea del destino. No ejecuta SQL sobre el origen, no actualiza almacenes al abrirlos y no altera bases alojadas.
+
+La copia conserva cuentas y contraseñas, IDs, revisiones, validaciones, historial, resultados y archivos originales. Revoca todas sus sesiones y enlaces del quiz; inicia sesión nuevamente y emite invitaciones nuevas cuando corresponda. El origen conserva sus dos archivos sin cambios y puede reabrirse con el código de la versión anterior, por ejemplo el commit `b6324d9fc08c793adfbf35281082ec9c1749caf6`. Volver a ese código requiere usar el origen; no permite abrir la copia nueva con un esquema viejo. No se fusiona a main ni se despliega la app.
+
+Si falla después de crear el destino, puede dejar una carpeta marcada como `initializing`: no se abre ni se reutiliza automáticamente. El original permanece disponible; inspecciona la carpeta fallida y utiliza otro nombre nuevo para un nuevo intento. Un destino existente jamás se sobrescribe. Los respaldos antiguos tampoco se convierten silenciosamente: `restore:local` sigue admitiendo solo la huella actual. Las pruebas de actualización usan exclusivamente fixtures sintéticos e incluyen conservación exacta del origen, archivos/exports, revocaciones, reapertura, respaldo/restauración de la copia, locks, checksums, identidad y rechazo de enlaces simbólicos. No se actualizaron almacenes de usuario.
 
 ## Límites y siguiente trabajo
 
