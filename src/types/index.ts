@@ -76,3 +76,6 @@ export interface CountryCode {
   code: string;
   dial_code: string;
 }
+
+// Host Training & Development (Stage 1 — type contracts only)
+export * from './training';
