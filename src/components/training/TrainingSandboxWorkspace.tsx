@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {LocalTrainingApi, LocalTrainingError, LocalActor, LocalWorkspace, PublicRow} from './localTrainingApi';
 import './TrainingDemoWorkspace.css';
+import TrainingLocalAgenda from './TrainingLocalAgenda';
 const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial'];
 const value = (row: PublicRow, key: string) => typeof row[key] === 'string' || typeof row[key] === 'number' ? String(row[key]) : '—';
 const columns: Record<string, {table: string; fields: [string,string][]}> = {
@@ -33,7 +34,7 @@ export default function TrainingSandboxWorkspace() {
   const workspace=data?.workspace, readonly=data?.actor.role==='readonly';
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
   return <section className="training-demo td-local" aria-label="Training API local">
-    <div className="td-notice"><strong>PRUEBA LOCAL · API de entrenamiento</strong><p>Solo cuentas y datos ficticios. La inscripción se guarda en este entorno local. La base actual de la app no se utiliza.</p></div>
+    <div className="td-notice"><strong>PRUEBA LOCAL · API de entrenamiento</strong><p>Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.</p></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!data ? <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
       const secret=password; setPassword(''); const next=await api.current.login(username,secret);
@@ -51,7 +52,8 @@ export default function TrainingSandboxWorkspace() {
         <div className="td-stats"><article className="td-panel">Emisores asignados: <strong>{workspace.trainees.length}</strong></article><article className="td-panel">Inscripciones: <strong>{workspace.enrollments.length}</strong></article><article className="td-panel">Sesiones: <strong>{workspace.sessions.length}</strong></article></div>
         <h3>Inscripciones del entorno local</h3>{workspace.enrollments.length===0?<p>Aún no hay inscripciones.</p>:<ul>{workspace.enrollments.map(row=><li key={row.id}>{value(row,'host_id')} · {value(row,'status')} · {value(row,'timezone')}</li>)}</ul>}
       </>}
-      {spec && <div className="td-table-scroll"><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {spec && section!=='Agenda' && <div className="td-table-scroll"><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {section==='Agenda' && workspace && <TrainingLocalAgenda api={api.current} workspace={workspace} readonly={readonly} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.current.enroll(host,program,timezone); await refresh();if(mounted.current)setNotice('Inscripción DEMO guardada.');
       });}}><h3>Inscribir emisor DEMO</h3>
@@ -60,7 +62,7 @@ export default function TrainingSandboxWorkspace() {
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
         <button disabled={busy || !host || !program}>Guardar inscripción DEMO</button>
       </form>}
-      {section!=='Resumen' && section!=='Historial' && <p>Esta etapa permite consultar datos de la API e inscribir emisores. Las demás acciones se conectarán en los siguientes pasos.</p>}
+      {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && <p>Esta etapa permite consultar datos, inscribir emisores y gestionar agenda/asistencia local. Las demás acciones se conectarán en los siguientes pasos.</p>}
     </>}
   </section>;
 }

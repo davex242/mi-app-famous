@@ -8,7 +8,7 @@ export class LocalTrainingError extends Error {
   constructor(public status: number) {
     super(status === 401 ? 'La sesión de prueba venció o las credenciales no son válidas.' :
       status === 403 ? 'Tu cuenta de prueba no tiene permiso para esta operación.' :
-      status === 409 ? 'Los datos cambiaron o esta inscripción ya existe. Actualiza la vista.' :
+      status === 409 ? 'Los datos cambiaron o la operación tiene un conflicto. Actualiza la vista y revisa de nuevo.' :
       status === 429 ? 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.' :
       'No se pudo completar la solicitud de prueba. Intenta nuevamente.');
   }
@@ -16,7 +16,9 @@ export class LocalTrainingError extends Error {
 export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
 export type PublicRow = {id?: string; [key: string]: unknown};
 export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
-const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
+const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
+export type AgendaParameters = {enrollment_id:string; start_date:string; local_time:string; weekdays:number[]};
+export type AgendaPreview = {preview:true; timezone:string; skipped:number; sessions:PublicRow[]; preview_hash:string};
 export class LocalTrainingApi {
   private token: string | null = null;
   private verified = false;
@@ -66,6 +68,22 @@ export class LocalTrainingApi {
   async enroll(host_id: string, program_version_id: string, timezone: string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/enrollments', {host_id, program_version_id, timezone});
+  }
+  async previewAgenda(parameters:AgendaParameters):Promise<AgendaPreview> {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/agenda/preview', parameters) as AgendaPreview;
+  }
+  async generateAgenda(parameters:AgendaParameters, expected_preview_hash:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/agenda/generate', {...parameters,expected_preview_hash});
+  }
+  async attendance(session_id:string, status:string, expected_recorded_at:string|null) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/attendance',{session_id,status,expected_recorded_at});
+  }
+  async reschedule(session_id:string, local_date:string, local_time:string, expected_scheduled_at:string, reason:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/sessions/reschedule',{session_id,local_date,local_time,expected_scheduled_at,reason});
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.

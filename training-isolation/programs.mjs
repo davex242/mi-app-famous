@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {loadPrivateImage} from './private-images.mjs';
 import {isPDFMaterial,loadPrivatePDF} from './private-pdfs.mjs';
 import {loadPrivateVideo} from './private-videos.mjs';
@@ -79,6 +79,7 @@ export function createProgramOperations(run, { fields, text, uuid, fail, require
     }
     return { enrollment: e, proposals, skipped };
   }
+  const agendaHash = result => createHash('sha256').update(JSON.stringify({enrollment_id:result.enrollment.id,program_version_id:result.enrollment.program_version_id,timezone:result.enrollment.timezone,sessions:result.proposals,skipped:result.skipped})).digest('hex');
   return {
     saveProgram: (token, body) => run(token, async (tx, actor) => {
       requireAdmin(actor); fields(body, ['source_id', 'title', 'duration_days', 'changelog', 'items']);
@@ -146,10 +147,13 @@ export function createProgramOperations(run, { fields, text, uuid, fail, require
     }),
     previewAgenda: (token, body) => run(token, async (tx, actor) => {
       const result = await plan(tx, actor, body);
-      return { preview: true, timezone: result.enrollment.timezone, skipped: result.skipped, sessions: result.proposals };
+      return { preview: true, timezone: result.enrollment.timezone, skipped: result.skipped, sessions: result.proposals, preview_hash: agendaHash(result) };
     }),
     generateAgenda: (token, body) => run(token, async (tx, actor) => {
-      const result = await plan(tx, actor, body), rows = [];
+      requireWrite(actor); fields(body,['enrollment_id','start_date','local_time','weekdays','expected_preview_hash']);
+      const {expected_preview_hash,...parameters}=body;
+      const result = await plan(tx, actor, parameters), rows = [];
+      if (expected_preview_hash !== undefined && (typeof expected_preview_hash !== 'string' || !/^[a-f0-9]{64}$/.test(expected_preview_hash) || expected_preview_hash !== agendaHash(result))) fail(409, 'Agenda preview changed; preview again');
       for (const proposal of result.proposals) {
         const created = (await tx.query(`insert into public.training_sessions(enrollment_id,item_id,topic_id,scheduled_at,duration_minutes,auto_generated,edited_manually)
           values($1,$2,$3,$4,$5,true,false) returning *`, [proposal.enrollment_id, proposal.item_id, proposal.topic_id, proposal.scheduled_at, proposal.duration_minutes])).rows[0];

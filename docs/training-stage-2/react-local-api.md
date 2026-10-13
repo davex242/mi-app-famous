@@ -1,6 +1,6 @@
 # Native React / local synthetic API
 
-The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Other operational forms, uploads, material access, invitations and completion remain to be adapted; the standalone local UI remains their working reference.
+The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Native agenda now supports preview/confirmation, chosen weekdays, local dates/times, attendance and rescheduling with required reasons. Evidence/review, uploads, material access, invitations and completion remain to be adapted; the standalone local UI remains their working reference.
 
 ## Run
 
@@ -16,10 +16,16 @@ A separate synthetic login is mandatory. Before transmitting these credentials t
 
 `/api/me` supplies the current role; `/api/workspace` supplies current assignment-scoped public DTOs. Existing app roles are never transmitted as authorization. Every write remains permission-checked by the server. Refresh applies role changes, and authentication/permission failures clear the displayed workspace. UI values are explicitly projected as text; private answers, credential digests, attachment contents and event details are not rendered.
 
+## Agenda confirmation and concurrency
+
+React sends the exact preview hash when confirming generation. The server recomputes the proposal under the enrollment transaction and rejects a changed hash with HTTP 409. The hash includes the enrollment, pinned program version, timezone, proposed dates/durations and skipped count. It is a consistency check, not an authentication credential. Existing standalone callers can continue without this optional parameter; the native React flow always supplies it.
+
+Changing proposal inputs or refreshing the workspace removes the old confirmation. Already scheduled/completed practices are skipped. Attendance submits the currently displayed recorded timestamp; rescheduling submits the displayed schedule timestamp, enrollment-local date/time and reason. Server checks reject stale timestamps and overlapping sessions. Read-only actors see the scoped agenda with no operational forms, and recording attendance does not complete a practice.
+
 ## Validation
 
 `npm run test:react-local` exercises the actual React component, HTTP server, credential service and isolated database in Chromium, including enrollment, duplicate conflicts, read-only denial, role downgrade, revocation, explicit opt-in and capability checks, mobile navigation and absence of external traffic/browser persistence. Set `BROWSER_EXECUTABLE_PATH` for an existing Chromium binary if needed.
 
-Validation on 2026-10-13: 86 local React/API checks, 233 default React DEMO checks, 27 existing HTTP API tests and strict TypeScript checking passed. Desktop/mobile screenshots are in `preview/react-local-api/`.
+Validation on 2026-10-13: 105 local React/API checks, 233 default React DEMO checks, 46 existing HTTP API/program tests and strict TypeScript checking passed. Enrollment screenshots are in `preview/react-local-api/`; agenda/attendance screenshots are in `preview/react-agenda-api/`.
 
 Keep `npm run test:react-demo` as the default-mode regression check. These local tests do not establish production readiness, hosted access policies, concurrent hosted behavior or a migration plan. Training remains on `base44/setup-b8f0f68b` and is not merged into main.
