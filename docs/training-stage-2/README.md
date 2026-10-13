@@ -82,10 +82,14 @@ Los DTO actuales no cambian. ProgramDay.days se construye agrupando program_item
 4. Implementar operaciones de servidor para publicar, inscribir, transferir, reprogramar, registrar asistencia, enviar/revisar evidencia, evaluar, actualizar versión y emitir/corregir quiz. Todos deben validar actor/rol/alcance; bloquear publicación y completions para edit/readonly.
 5. Invariantes transaccionales: publicación inmutable, exactamente 50 preguntas y claves válidas, item/session/evidence de la misma inscripción, porcentaje derivado, terminalidad de intentos, expiración, idempotencia y auditoría real. El borrador no implementa esos endpoints.
 
-## Validación
+## Validación de la entrega inicial de Etapa 2
 
 Etapa 2 solo modifica documentación y SQL de diseño; no cambia React, dependencias, login ni configuración. No se ejecuta TypeScript/build para estos cambios documentales, ni se afirma que pasaron. Sin base local ni esquema confirmado, no se ha ejecutado este SQL ni se han probado políticas reales. La comprobación estática pasó: 18 tablas públicas con políticas SELECT, 5 tablas privadas sin acceso de cliente, ninguna concesión de escritura a authenticated, bloqueo de ejecución y rollback, sin claves correctas en la tabla pública de preguntas y sin DDL para hosts/app_users. No equivale a validación sintáctica/semántica ni a una prueba PostgreSQL.
 
 Antes de aplicar en un entorno aislado, añadir y ejecutar pruebas SQL de permitir/denegar: identidad ausente/inactiva; cada rol; emisor propio/ajeno; editar actor/reclutador/score/aprobación; desactivación/transferencia inmediata; borradores ocultos; publicación y versiones históricas; update preservando progreso; intento de leer claves/tokens; examen de 49/51 preguntas; token inválido/caducado/revocado; doble submit y concurrencia; completions sin evidencia; readonly sin escritura. Revisar también planes de consulta e índices del alcance. Solo después generar una migración y solicitar la autorización de aplicación que corresponda al siguiente alcance.
 
 Fuentes oficiales consultadas: https://supabase.com/docs/guides/database/postgres/row-level-security y https://supabase.com/docs/guides/database/postgres/column-level-security. El índice changelog.md no se pudo recuperar por el lector web (tipo text/markdown); no se implementan cambios de producto en esta etapa.
+
+## Avance posterior: pruebas aisladas autorizadas
+
+Se añadió `training-isolation/`, un paquete independiente con PostgreSQL en memoria y datos sintéticos. El SQL se ejecutó únicamente dentro de ese proceso temporal: el archivo de diseño mantiene intactos su bloqueo y ROLLBACK. Pasaron 163 pruebas de ejecución, RLS, grants, separación por ID, secretos, revocación e integridad. Ver `training-isolation/README.md` para reproducir y para los límites del ensayo. No se modificaron código/dependencias de la app, login, `main` ni bases alojadas. Esto reemplaza la limitación de no haber ejecutado SQL de la entrega inicial solamente para el entorno sintético; no confirma el esquema real ni la integración de autenticación o API.
