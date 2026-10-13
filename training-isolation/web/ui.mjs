@@ -1,9 +1,9 @@
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false };
+const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Costa_Rica';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
-const statuses = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
+const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
   'Invalid credentials': 'La cuenta o la contraseña temporal no coinciden.',
   'Authentication required': 'La sesión venció o fue revocada. Inicia sesión otra vez.',
@@ -18,12 +18,18 @@ const errors = {
   'Invalid fields': 'Los campos enviados no son válidos.',
   'Published program required': 'Selecciona un programa publicado.',
   'Try again later': 'Se alcanzó el límite de solicitudes. Espera un minuto.',
+  'A newer revision exists': 'Existe una revisión más reciente. Actualiza la biblioteca antes de editar.',
+  'Only the latest draft can be published': 'Solo se puede publicar el borrador más reciente.',
+  'Publish the topic revision first': 'Primero debes publicar la revisión del tema al que pertenece el material.',
+  'Preview is disabled for this revision': 'Esta revisión no permite vista previa.',
+  'Download is disabled for this revision': 'Esta revisión no permite descarga.',
+  'Valid public HTTPS link required': 'Usa un enlace HTTPS público, sin credenciales ni direcciones locales.',
 };
 const isAdmin = () => ['superadmin', 'subadmin'].includes(state.actor?.role);
 const canWrite = () => isAdmin() || state.actor?.role === 'edit';
 const opt = (value, label) => `<option value="${esc(value)}">${esc(label)}</option>`;
 const empty = (title, detail) => `<div class="empty"><strong>${esc(title)}</strong>${esc(detail)}</div>`;
-const pill = status => `<span class="pill ${status === 'approved' || status === 'completed' ? 'good' : status === 'rejected' ? 'rejected' : 'pending'}">${esc(statuses[status] || status)}</span>`;
+const pill = status => `<span class="pill ${['approved', 'completed', 'published'].includes(status) ? 'good' : status === 'rejected' ? 'rejected' : 'pending'}">${esc(statuses[status] || status)}</span>`;
 const topic = id => state.workspace.topics.find(t => t.id === id)?.title || 'Tema DEMO';
 const trainee = id => state.workspace.trainees.find(t => t.host_id === id)?.label || 'Emisor DEMO';
 const enrollLabel = enrollment => `${trainee(enrollment.host_id)} · Programa ${state.workspace.program_versions.find(p => p.id === enrollment.program_version_id)?.version || 1}`;
@@ -33,6 +39,7 @@ function notify(message, error = false) {
 }
 function exitSession() {
   state.token = null; state.actor = null; state.workspace = null;
+  state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -106,20 +113,42 @@ function evidence() {
   return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}`;
 }
 function library() {
-  const rows = state.workspace.topics.map(t => `<div class="list-row"><div><p>${esc(t.title)}</p><small>${esc(t.category)} · ${t.estimated_minutes} minutos</small></div><span class="pill">DEMO</span></div>`).join('');
-  return `<section class="panel"><h2>Biblioteca de entrenamiento</h2><p>Temas del programa de prueba. No son materiales definitivos.</p>${rows || empty('Biblioteca vacía', 'Todavía no hay temas disponibles.')}</section><div class="future"><h3>Materiales descargables y entrenamiento libre</h3><p>Próxima etapa: documentos, videos, vista previa, contenidos versionados y programas libres.</p></div>`;
+  const w = state.workspace, materials = state.catalogueMode === 'materials';
+  const all = materials ? w.materials : w.topics;
+  const latest = values => values.filter(value => !values.some(other => other.content_key === value.content_key && other.revision > value.revision));
+  const values = state.catalogueHistory ? all : latest(all);
+  const head = `<section class="panel"><div class="panel-head"><div><h2>Biblioteca de entrenamiento</h2><p>Catálogo temporal de temas y materiales. Cada cambio crea una nueva revisión.</p></div><span class="pill">ENTORNO DEMO</span></div><div class="catalogue-tabs"><button class="${!materials ? 'primary' : 'secondary'}" data-catalogue-mode="topics">Temas</button><button class="${materials ? 'primary' : 'secondary'}" data-catalogue-mode="materials">Materiales</button><label class="check-label"><input type="checkbox" id="catalogue-history" ${state.catalogueHistory ? 'checked' : ''}> Mostrar revisiones anteriores</label></div></section>`;
+  const rows = values.slice().sort((a, b) => a.title.localeCompare(b.title)).map(value => {
+    const current = latest(all).some(row => row.id === value.id);
+    const edit = isAdmin() ? `<button class="secondary" data-edit-${materials ? 'material' : 'topic'}="${esc(value.id)}" ${!current ? 'disabled' : ''}>Nueva revisión</button>` : '';
+    const publish = isAdmin() && value.status === 'draft' && current ? `<button class="primary" data-publish-${materials ? 'material' : 'topic'}="${esc(value.id)}">Publicar</button>` : '';
+    const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || value.kind !== 'document' ? 'disabled' : ''}>Descargar</button>` : '';
+    const detail = materials ? `${value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
+    return `<article class="catalogue-card"><div class="catalogue-card-head"><div><h3>${esc(value.title)}</h3><p class="caption">${esc(detail)} · Revisión ${value.revision}</p></div>${pill(value.status)}</div>${!materials && value.description ? `<p class="caption">${esc(value.description)}</p>` : ''}<div class="actions">${access}${edit}${publish}</div></article>`;
+  }).join('');
+  let form = '';
+  if (isAdmin() && !materials) {
+    const value = state.editTopic;
+    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del tema' : 'Crear tema'}</h2><p>${value ? `La revisión ${value.revision} se conservará sin cambios.` : 'El tema comenzará como borrador.'}</p></div>${value ? '<button class="secondary" data-cancel-topic>Cancelar</button>' : ''}</div><form id="topic-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Descripción<textarea name="description" maxlength="2000">${esc(value?.description)}</textarea></label><div class="form-grid"><label>Categoría<input name="category" maxlength="100" value="${esc(value?.category || 'Entrenamiento')}" required></label><label>Tiempo estimado (minutos)<input name="estimated_minutes" type="number" min="1" max="480" value="${value?.estimated_minutes || 30}" required></label></div><button class="primary" type="submit">Guardar borrador</button></form></section>`;
+  } else if (isAdmin() && materials) {
+    const value = state.editMaterial;
+    const topics = w.topics.filter(t => ['draft', 'published'].includes(t.status));
+    const options = topics.map(t => `<option value="${esc(t.id)}" ${value?.topic_id === t.id ? 'selected' : ''}>${esc(t.title)} · r${t.revision} · ${esc(statuses[t.status])}</option>`).join('');
+    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Los documentos se descargan como archivo de texto.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${value?.kind !== 'link' ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option></select></label><label id="material-text-field" ${value?.kind === 'link' ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${value?.kind !== 'link' ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false ? 'checked' : ''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
+  }
+  return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
 }
 function history() {
   const w = state.workspace;
-  const rows = w.approvals.filter(a => a.reviewed_at).map(a => `<tr><td>Revisión de evidencia<small>${esc(a.review_notes)}</small></td><td>${pill(a.status)}</td><td>${esc(date(a.reviewed_at))}</td></tr>`).join('') + w.assessments.map(a => `<tr><td>Evaluación práctica<small>${esc(a.notes)}</small></td><td>${a.score}/100 · ${a.passed ? 'Satisfactoria' : 'Requiere mejora'}</td><td>${esc(date(a.assessed_at))}</td></tr>`).join('');
+  const rows = w.approvals.filter(a => a.reviewed_at).map(a => `<tr><td>${a.topic_id ? 'Publicación de tema' : a.material_id ? 'Publicación de material' : 'Revisión de evidencia'}<small>${esc(a.review_notes)}</small></td><td>${pill(a.status)}</td><td>${esc(date(a.reviewed_at))}</td></tr>`).join('') + w.assessments.map(a => `<tr><td>Evaluación práctica<small>${esc(a.notes)}</small></td><td>${a.score}/100 · ${a.passed ? 'Satisfactoria' : 'Requiere mejora'}</td><td>${esc(date(a.assessed_at))}</td></tr>`).join('');
   return `<section class="panel"><h2>Historial de entrenamiento</h2><p>Cada revisión conserva su resultado y sus notas.</p>${rows ? `<div class="table-scroll"><table><thead><tr><th>Acción</th><th>Resultado</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu historial comienza aquí', 'Aparecerá cuando se revisen evidencias o se registren evaluaciones.')}</section><div class="future"><h3>Quiz final · 50 preguntas</h3><p>Función futura. Validar una práctica todavía no completa el programa ni genera una certificación.</p></div>`;
 }
-async function action(path, body, message) {
+async function action(path, body, message, afterSuccess) {
   if (state.busy) return;
   state.busy = true;
   $('#content').querySelectorAll('button').forEach(button => { button.disabled = true; });
   try {
-    await api(path, body); await refresh(); notify(message + ' Datos guardados únicamente en este entorno temporal.');
+    await api(path, body); afterSuccess?.(); await refresh(); notify(message + ' Datos guardados únicamente en este entorno temporal.');
   } catch (error) { if (state.token) { render(); notify(error.message, true); } else $('#login-error').textContent = error.message; }
   finally { state.busy = false; }
 }
@@ -138,6 +167,13 @@ $('#logout-button').addEventListener('click', async () => {
 });
 $('#content').addEventListener('change', event => {
   if (event.target.matches('#schedule-form [name="enrollment_id"]')) $('#schedule-form [name="item_id"]').innerHTML = itemOptions(event.target.value);
+  if (event.target.id === 'catalogue-history') { state.catalogueHistory = event.target.checked; render(); }
+  if (event.target.matches('#material-form [name="kind"]')) {
+    const link = event.target.value === 'link';
+    $('#material-text-field').hidden = link; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;
+    $('#material-form [name="content"]').required = !link; $('#material-form [name="external_url"]').required = link;
+    $('#material-form [name="allow_download"]').checked = !link;
+  }
 });
 $('#content').addEventListener('submit', event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
@@ -150,7 +186,45 @@ $('#content').addEventListener('submit', event => {
   if (form.id === 'evidence-form') action('/api/evidence', data, 'Práctica enviada para revisión.');
   if (form.dataset.review) action('/api/evidence/review', { ...data, evidence_id: form.dataset.review }, 'Revisión registrada.');
   if (form.id === 'assessment-form') action('/api/assessments', { ...data, score: Number(data.score), passed: data.passed === 'true' }, 'Evaluación registrada.');
+  if (form.id === 'topic-form') action('/api/topics', { ...data, estimated_minutes: Number(data.estimated_minutes), ...(state.editTopic ? { source_id: state.editTopic.id } : {}) }, 'Borrador de tema creado.', () => { state.editTopic = null; });
+  if (form.id === 'material-form') {
+    const link = data.kind === 'link';
+    const body = { title: data.title, topic_id: data.topic_id, kind: data.kind, allow_preview: form.elements.allow_preview.checked,
+      allow_download: !link && form.elements.allow_download.checked, ...(link ? { external_url: data.external_url } : { content: data.content }),
+      ...(state.editMaterial ? { source_id: state.editMaterial.id } : {}) };
+    action('/api/materials', body, 'Borrador de material creado.', () => { state.editMaterial = null; });
+  }
 });
-$('#content').addEventListener('click', event => {
+$('#content').addEventListener('click', async event => {
+  const button = event.target.closest('button');
+  if (!button || state.busy) return;
   if (event.target.id === 'complete-button') action('/api/items/complete', { session_id: $('#assessment-form [name="session_id"]').value }, 'Práctica validada.');
+  if (button.dataset.catalogueMode) { state.catalogueMode = button.dataset.catalogueMode; render(); }
+  if (button.hasAttribute('data-cancel-topic')) { state.editTopic = null; render(); }
+  if (button.hasAttribute('data-cancel-material')) { state.editMaterial = null; render(); }
+  if (button.dataset.editTopic) { state.editTopic = state.workspace.topics.find(t => t.id === button.dataset.editTopic); render(); $('#topic-form input').focus(); }
+  if (button.dataset.publishTopic) action('/api/topics/publish', { id: button.dataset.publishTopic }, 'Tema publicado.');
+  if (button.dataset.publishMaterial) action('/api/materials/publish', { id: button.dataset.publishMaterial }, 'Material publicado.');
+  if (button.hasAttribute('data-close-preview')) $('#material-preview').close();
+  if (button.dataset.editMaterial || button.dataset.previewMaterial || button.dataset.downloadMaterial) {
+    state.busy = true;
+    try {
+      if (button.dataset.editMaterial) {
+        state.editMaterial = await api('/api/materials/edit-data', { id: button.dataset.editMaterial }); render(); $('#material-form input').focus();
+      } else if (button.dataset.previewMaterial) {
+        const result = await api('/api/materials/preview', { id: button.dataset.previewMaterial });
+        $('#preview-title').textContent = `${result.title} · Revisión ${result.revision}`;
+        $('#preview-text').hidden = result.type !== 'text'; $('#preview-link').hidden = result.type !== 'link';
+        $('#preview-text').textContent = result.content || ''; $('#preview-link-anchor').removeAttribute('href');
+        if (result.type === 'link') $('#preview-link-anchor').href = result.url;
+        $('#material-preview').showModal();
+      } else {
+        const result = await api('/api/materials/download', { id: button.dataset.downloadMaterial });
+        const url = URL.createObjectURL(new Blob([result.content], { type: result.mime }));
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename; anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000); notify('Descarga del documento de texto iniciada.');
+      }
+    } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
+    finally { state.busy = false; }
+  }
 });

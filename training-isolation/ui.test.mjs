@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { createIsolatedDatabase } from './database.mjs';
 import { createTrainingService, provisionSyntheticUser } from './service.mjs';
@@ -87,6 +87,87 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       await administrator.locator('[data-tab="history"]').click();
       assert.match(await administrator.locator('#content').textContent(), /DEMO habilidades verificadas/);
     });
+    let catalogueTopic, catalogueMaterial;
+    const documentContent = 'DEMO Guía de networking <script>window.materialScript=true</script>';
+    await t.test('administrator creates and publishes a topic through the library', async () => {
+      await administrator.locator('[data-tab="library"]').click();
+      await administrator.locator('#topic-form [name="title"]').fill('DEMO Networking respetuoso');
+      await administrator.locator('#topic-form [name="description"]').fill('Prácticas para crecer la red con respeto.');
+      await administrator.locator('#topic-form [name="category"]').fill('Networking');
+      await administrator.locator('#topic-form button').click();
+      await administrator.locator('#notice').filter({ hasText: 'Borrador de tema creado' }).waitFor();
+      catalogueTopic = (await db.query("select * from public.training_topics where title='DEMO Networking respetuoso'")).rows[0];
+      assert.equal(catalogueTopic.status, 'draft');
+      await administrator.locator(`[data-publish-topic="${catalogueTopic.id}"]`).click();
+      await administrator.locator('#notice').filter({ hasText: 'Tema publicado' }).waitFor();
+    });
+    await t.test('administrator creates a downloadable text document and safe preview', async () => {
+      await administrator.locator('[data-catalogue-mode="materials"]').click();
+      await administrator.locator('#material-form [name="title"]').fill('DEMO Guía de networking');
+      await administrator.locator('#material-form [name="topic_id"]').selectOption(catalogueTopic.id);
+      await administrator.locator('#material-form [name="content"]').fill(documentContent);
+      await administrator.locator('#material-form button').click();
+      await administrator.locator('#notice').filter({ hasText: 'Borrador de material creado' }).waitFor();
+      catalogueMaterial = (await db.query("select * from public.training_materials where title='DEMO Guía de networking'")).rows[0];
+      await administrator.locator(`[data-publish-material="${catalogueMaterial.id}"]`).click();
+      await administrator.locator('#notice').filter({ hasText: 'Material publicado' }).waitFor();
+      await administrator.locator(`[data-preview-material="${catalogueMaterial.id}"]`).click();
+      await administrator.locator('#material-preview').waitFor({ state: 'visible' });
+      assert.equal(await administrator.locator('#preview-text').textContent(), documentContent);
+      assert.equal(await administrator.evaluate(() => window.materialScript), undefined);
+      await administrator.locator('[data-close-preview]').click();
+    });
+    await t.test('recruiter downloads exact published content without administrative controls', async () => {
+      await recruiter.locator('[data-tab="library"]').click();
+      await recruiter.locator('#refresh-button').click();
+      await recruiter.locator('#notice').filter({ hasText: 'Información actualizada' }).waitFor();
+      await recruiter.locator('[data-catalogue-mode="materials"]').click();
+      assert.equal(await recruiter.locator('#material-form').count(), 0);
+      assert.equal(await recruiter.locator('[data-publish-material]').count(), 0);
+      const downloaded = recruiter.waitForEvent('download');
+      await recruiter.locator(`[data-download-material="${catalogueMaterial.id}"]`).click();
+      const download = await downloaded;
+      assert.equal(await readFile(await download.path(), 'utf8'), documentContent);
+      assert.match(download.suggestedFilename(), /\.txt$/);
+    });
+    await t.test('material edit creates a draft revision without changing published content', async () => {
+      await administrator.locator(`[data-edit-material="${catalogueMaterial.id}"]`).click();
+      await administrator.locator('#material-form [name="content"]').fill('DEMO guía revisada');
+      await administrator.locator('#material-form button').click();
+      await administrator.locator('#notice').filter({ hasText: 'Borrador de material creado' }).waitFor();
+      const revisions = (await db.query('select revision,status from public.training_materials where content_key=$1 order by revision', [catalogueMaterial.content_key])).rows;
+      assert.deepEqual(revisions, [{ revision: 1, status: 'published' }, { revision: 2, status: 'draft' }]);
+      await administrator.locator('#catalogue-history').check();
+      assert.equal(await administrator.locator('.catalogue-card').count(), 2);
+    });
+    await t.test('HTTPS link form and preview do not automatically fetch external content', async () => {
+      await administrator.locator('#material-form [name="title"]').fill('DEMO Enlace externo');
+      await administrator.locator('#material-form [name="kind"]').selectOption('link');
+      assert.equal(await administrator.locator('#material-text-field').isVisible(), false);
+      assert.equal(await administrator.locator('#material-download-field').isVisible(), false);
+      await administrator.locator('#material-form [name="external_url"]').fill('https://example.com/training');
+      await administrator.locator('#material-form button').click();
+      await administrator.locator('#notice').filter({ hasText: 'Borrador de material creado' }).waitFor();
+      const link = (await db.query("select id from public.training_materials where title='DEMO Enlace externo'")).rows[0];
+      await administrator.locator(`[data-publish-material="${link.id}"]`).click();
+      await administrator.locator('#notice').filter({ hasText: 'Material publicado' }).waitFor();
+      await administrator.locator(`[data-preview-material="${link.id}"]`).click();
+      await administrator.locator('#material-preview').waitFor({ state: 'visible' });
+      assert.equal(await administrator.locator('#preview-link-anchor').getAttribute('href'), 'https://example.com/training');
+      assert.equal(await administrator.locator('#preview-link-anchor').getAttribute('rel'), 'noopener noreferrer');
+      assert.deepEqual(remoteRequests, []);
+      await administrator.locator('[data-close-preview]').click();
+      await administrator.locator('[data-tab="history"]').click();
+      assert.match(await administrator.locator('#content').textContent(), /Publicación de material/);
+      assert.match(await administrator.locator('#content').textContent(), /Publicación de tema/);
+      await administrator.locator('[data-tab="library"]').click();
+    });
+    await t.test('administrative catalogue remains usable on mobile', async () => {
+      await administrator.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await administrator.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+      assert.equal(await administrator.locator('#material-form').isVisible(), true);
+      await administrator.setViewportSize({ width: 1440, height: 1050 });
+    });
     await t.test('mobile layout fits viewport and exposes readonly data without actions', async () => {
       await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2', [users.readonly.app_user_id, demo.host_id]);
       const mobile = await pageFor('readonly', { width: 390, height: 844 });
@@ -113,6 +194,8 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       await mkdir(process.env.UI_SCREENSHOT_DIR, { recursive: true });
       await administrator.locator('[data-tab="overview"]').click();
       await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-desktop.png`, fullPage: true });
+      await administrator.locator('[data-tab="library"]').click();
+      await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-library.png`, fullPage: true });
       const mobile = pages[2];
       await mobile.locator('[data-tab="overview"]').click();
       await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-mobile.png`, fullPage: true });

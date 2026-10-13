@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { createCatalogueOperations } from './catalogue.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -62,6 +63,7 @@ export function createTrainingService(db) {
     }
   }
   return {
+    ...createCatalogueOperations(run, { requireAdmin, fields, text, uuid, fail, audit, admin }),
     async login(body) {
       fields(body, ['username', 'password']);
       const username = text(body.username, 80);
@@ -96,10 +98,12 @@ export function createTrainingService(db) {
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec('set local role authenticated');
       const result = { sandbox: true, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
-      for (const table of ['topics', 'program_versions', 'program_items', 'enrollments', 'sessions', 'evidence', 'assessments', 'approvals', 'completions']) {
+      for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'enrollments', 'sessions', 'evidence', 'assessments', 'approvals', 'completions']) {
         // Static table allowlist; never accepts a table name from a caller.
         result[table] = (await tx.query(`select * from public.training_${table}`)).rows;
       }
+      // Material content and link targets require a separate permission-checked request.
+      result.materials = result.materials.map(material => ({ ...material, external_url: null }));
       return result;
     }),
     enroll: (token, body) => run(token, async (tx, actor) => {

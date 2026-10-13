@@ -22,6 +22,11 @@ export async function createIsolatedDatabase() {
       alter table training_private.local_credentials enable row level security;
       alter table training_private.local_sessions enable row level security;
       revoke all on training_private.local_credentials,training_private.local_sessions from public,anon,authenticated;
+      create table training_private.local_material_content (
+        material_id uuid primary key references public.training_materials(id), body text not null
+      );
+      alter table training_private.local_material_content enable row level security;
+      revoke all on training_private.local_material_content from public,anon,authenticated;
     `);
     return db;
   } catch (error) {

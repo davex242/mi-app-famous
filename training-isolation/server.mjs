@@ -45,6 +45,10 @@ export function createSandboxHttpServer(service) {
         '/api/login': 'login', '/api/logout': 'logout', '/api/enrollments': 'enroll',
         '/api/sessions': 'schedule', '/api/evidence': 'submitEvidence',
         '/api/evidence/review': 'reviewEvidence', '/api/assessments': 'assess', '/api/items/complete': 'completeItem',
+        '/api/topics': 'saveTopic', '/api/topics/publish': 'publishTopic',
+        '/api/materials': 'saveMaterial', '/api/materials/publish': 'publishMaterial',
+        '/api/materials/edit-data': 'materialEditData', '/api/materials/preview': 'previewMaterial',
+        '/api/materials/download': 'downloadMaterial',
       };
       if (!routes[path]) throw new ApiError(404, 'Endpoint unavailable');
       if (req.method !== 'POST') throw new ApiError(405, 'Method unavailable');
