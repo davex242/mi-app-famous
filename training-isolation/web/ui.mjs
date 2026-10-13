@@ -164,8 +164,18 @@ function overview() {
     return `<div class="day ${done ? 'done' : planned ? 'planned' : ''}"><span>DÍA ${item.day}</span><strong>Práctica ${item.day}</strong><small>${done ? `${done} validada${done > 1 ? 's' : ''}` : planned ? 'En agenda' : 'Por programar'}</small></div>`;
   }).join('')}</div>` : empty('Sin programa publicado', 'El catálogo está vacío en este entorno.');
   const enrollmentForm = canWrite() ? `<form id="enroll-form"><label>Emisor<select name="host_id" required>${available.length ? available.map(t => opt(t.host_id, t.label)).join('') : opt('', 'Sin emisores pendientes de inscripción')}</select></label><label>Programa publicado<select name="program_version_id" required>${w.program_versions.filter(p => p.status === 'published').map(p => opt(p.id, p.title)).join('')}</select></label><label>Zona horaria<input name="timezone" value="${esc(zone)}" required></label><button class="primary" type="submit" ${!available.length ? 'disabled' : ''}>Inscribir emisor →</button></form>` : '<p class="caption">Las inscripciones las gestiona tu reclutador o un administrador.</p>';
-  const rows = w.enrollments.map(e => {const progress=w.progress.find(p=>p.enrollment_id===e.id);return `<div class="list-row"><div><p>${esc(trainee(e.host_id))}</p><small>${esc(e.timezone)} · ${progress.completed_items} de ${progress.total_items} prácticas · ${progress.percent.toLocaleString('es-CR')}%</small></div>${pill(e.status)}</div>`;}).join('');
-  return `<div class="panel"><div class="panel-head"><div><h2>Un programa, a tu ritmo</h2><p>${esc(program?.title || 'Programa DEMO')} · Duración inicial flexible, sin perder de vista el progreso.</p></div><span class="pill">DEMO · ${program?.duration_days || 14} días</span></div>${grid}</div><div class="cols"><section class="panel"><h2>Emisores en entrenamiento</h2>${rows || empty('Todo empieza con una inscripción', 'Inscribe un emisor DEMO para comenzar su agenda.')}</section><section class="panel"><h2>${canWrite() ? 'Nueva inscripción' : 'Tu seguimiento'}</h2>${enrollmentForm}</section></div>`;
+  const shortcuts = [
+    ['agenda', 'Agenda y asistencia', 'Consulta las sesiones y el registro de asistencia.'],
+    ['evidence', isAdmin() ? 'Revisar evidencias' : 'Evidencias prácticas', `${w.evidence.filter(e=>e.status==='pending').length} pendientes de revisión administrativa.`],
+    ['exams', 'Quiz final', 'Consulta la evaluación de 50 preguntas.'],
+  ].map(([tab,title,description])=>`<button class="overview-shortcut" data-open-tab="${tab}"><strong>${esc(title)} <span aria-hidden="true">→</span></strong><span>${esc(description)}</span></button>`).join('');
+  const rows = w.enrollments.map(e => {
+    const progress=w.progress.find(p=>p.enrollment_id===e.id);
+    const assigned=w.program_versions.find(p=>p.id===e.program_version_id);
+    const percent=Math.min(100,Math.max(0,Number(progress?.percent)||0));
+    return `<div class="list-row trainee-progress"><div><p>${esc(trainee(e.host_id))}</p><small>${esc(assigned?.title || 'Entrenamiento libre')} · ${esc(e.timezone)}</small><label class="progress-label">Prácticas validadas · ${progress?.completed_items || 0} de ${progress?.total_items || 0}<progress max="100" value="${percent}" aria-label="Prácticas validadas de ${esc(trainee(e.host_id))}">${percent}%</progress></label><small>${percent.toLocaleString('es-CR')}% de prácticas · El quiz y el cierre se revisan por separado.</small></div>${pill(e.status)}</div>`;
+  }).join('');
+  return `<section class="overview-start"><div><p class="eyebrow">TU PRÓXIMO PASO</p><h2>Todo el seguimiento, en un lugar</h2><p>Agenda, práctica y evaluación para acompañar a tus emisores.</p></div><div class="overview-shortcuts">${shortcuts}</div></section><div class="panel"><div class="panel-head"><div><h2>Un programa, a tu ritmo</h2><p>${esc(program?.title || 'Programa DEMO')} · Vista conjunta de prácticas de este programa.</p></div><span class="pill">${program ? `DEMO · ${program.duration_days} días` : 'SIN PROGRAMA'}</span></div>${grid}</div><div class="cols"><section class="panel"><h2>Emisores en entrenamiento</h2>${rows || empty('Todo empieza con una inscripción', 'Inscribe un emisor DEMO para comenzar su agenda.')}</section><section class="panel"><h2>${canWrite() ? 'Nueva inscripción' : 'Tu seguimiento'}</h2>${enrollmentForm}</section></div>`;
 }
 function agenda() {
   const w = state.workspace, active = w.enrollments.filter(e => e.status === 'active');
@@ -351,6 +361,10 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (['agenda','evidence','exams'].includes(button.dataset.openTab)) {
+    state.tab=button.dataset.openTab; $('#notice').hidden=true; render();
+    $('#workspace-title').setAttribute('tabindex','-1'); $('#workspace-title').focus(); return;
+  }
   if(button.hasAttribute('data-close-evidence')){clearEvidenceImage();$('#evidence-preview').close();return;}
   if(button.dataset.previewEvidence||button.dataset.downloadEvidence){
     state.busy=true;const token=state.token;

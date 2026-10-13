@@ -49,6 +49,12 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal(await recruiter.locator('.day').count(), 14);
       assert.match(await recruiter.locator('#workspace-title').textContent(), /Recruiter/);
       assert.equal(await recruiter.locator('#enroll-form').count(), 1);
+      for (const tab of ['agenda','evidence','exams']) {
+        await recruiter.locator(`[data-open-tab="${tab}"]`).click();
+        assert.equal(await recruiter.locator(`#nav [data-tab="${tab}"]`).getAttribute('class'), 'active');
+        assert.equal(await recruiter.evaluate(()=>document.activeElement.id), 'workspace-title');
+        await recruiter.locator('#nav [data-tab="overview"]').click();
+      }
     });
     await t.test('recruiter enrolls and schedules through real sandbox API', async () => {
       await recruiter.locator('#enroll-form button').click();
