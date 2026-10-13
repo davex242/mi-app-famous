@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9`, `playwright@1.58
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir PDF privados: **344 pruebas de SQL/API y 67 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir clips MP4 privados: **354 pruebas de SQL/API y 74 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -67,6 +67,7 @@ Cada edición crea otra fila con el mismo content_key y revision incrementada. N
 Materiales soportados en esta entrega:
 
 - **Documento de texto:** título, revisión exacta de tema, contenido de hasta 20.000 caracteres sujeto al límite JSON de 32 KB, vista previa de texto y descarga real como `.txt`.
+- **Clip MP4 privado:** reproducción manual y descarga del original, H.264/AAC-LC dentro de los límites descritos abajo.
 - **PDF privado:** carga real, descarga del original y revisiones; no se ofrece visor integrado. Límites y compatibilidad se detallan abajo.
 - **Imagen PNG privada:** carga real, vista previa y descarga del archivo normalizado, con revisiones y permisos independientes; límites y formato admitido se detallan abajo.
 - **Enlace HTTPS público:** título y URL validados; vista previa muestra un enlace que el usuario debe abrir manualmente. El servidor no descarga contenido externo ni genera miniaturas. No se ofrece descarga de documentos para enlaces.
@@ -104,7 +105,7 @@ storage_path es una referencia lógica: no existe una URL pública ni se sirve u
 | /api/materials/download | id | Sesión activa y revisión visible; permiso de descarga |
 | /api/materials/edit-data | id | Administrador; incluye bytes para preparar otra revisión |
 
-Las cargas PNG y PDF amplían el límite HTTP al base64 máximo y 8 KiB de metadatos. Las demás rutas mantienen 32 KiB. El lector acumula buffers dentro del límite y rechaza excesos sin cortar abruptamente la siguiente conexión; decodifica UTF-8 una sola vez. La auditoría conserva actor y revisión; al crear una imagen añade tamaño/dimensiones/checksum, sin bytes ni nombre original.
+Las cargas PNG, PDF y MP4 amplían el límite HTTP al base64 máximo y 8 KiB de metadatos. Las demás rutas mantienen 32 KiB. El lector acumula buffers dentro del límite y rechaza excesos sin cortar abruptamente la siguiente conexión; decodifica UTF-8 una sola vez. La auditoría conserva actor y revisión; al crear una imagen añade tamaño/dimensiones/checksum, sin bytes ni nombre original.
 
 Se verificaron permisos, datos falsificados, CRC/estructura corruptos, animación/formato rechazados, descompresión excesiva, cargas reales mayores de 32 KiB, metadatos eliminados, acceso SQL denegado, publicación/revisiones y programas con contenido privado faltante/corrupto. En navegador se comprobó el color de píxeles decodificados, descarga exacta, retención de imagen al revisar, PNG falso rechazado y uso en móvil/solo lectura. [Captura móvil](preview/training-images-mobile.png), con una imagen sintética de QA.
 
@@ -120,7 +121,7 @@ Solo el PNG convertido se envía a /api/materials/image. El servidor vuelve a va
 
 No se añaden dependencias, tablas, migraciones ni cambios a la huella o al formato de persistencia. Se verificaron JPEG reales generados en navegador, píxeles/color, reducción proporcional, orientación EXIF de 90 grados, ausencia de metadatos originales, descarga PNG, rechazo previo a la API y uso en móvil. [Captura de conversión móvil](preview/training-jpeg-mobile.png), con fotografías sintéticas de QA. La revisión de navegador se ejecutó con Chromium; no se afirma haber probado todos los navegadores o variantes JPEG.
 
-Referencias del comportamiento de conversión: [ImageBitmap en HTML Standard](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html) y [serialización de canvas](https://html.spec.whatwg.org/multipage/canvas.html). El visor PDF, videos y adjuntos de evidencia permanecen pendientes.
+Referencias del comportamiento de conversión: [ImageBitmap en HTML Standard](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html) y [serialización de canvas](https://html.spec.whatwg.org/multipage/canvas.html). El visor PDF y adjuntos de evidencia permanecen pendientes. Los clips MP4 locales se describen abajo.
 
 ## PDF privados para descarga
 
@@ -142,7 +143,29 @@ La validación se repite al publicar material/programa, descargar o preparar una
 
 Las pruebas incluyen documentos de dos escritores independientes, estructuras tradicionales/comprimidas, contraseña declarada, JavaScript/formularios/acciones/adjuntos, exceso de páginas/descompresión, truncamiento/xref falso, permisos, revisiones y contenido privado corrupto. En navegador se probó carga/publicación, descarga exacta, retención del PDF al revisar, lectura histórica en móvil y cambio de tipo PDF a texto. Capturas: [biblioteca móvil](preview/training-pdf-mobile.png) y [primera página del documento sintético de QA](preview/training-pdf-document.png), renderizada externamente para verificar el archivo de prueba; esa captura no es un visor integrado.
 
-Fuentes del analizador: [PDF-LIB LoadOptions](https://pdf-lib.js.org/docs/api/interfaces/loadoptions) y [workers de Node](https://nodejs.org/api/worker_threads.html). La dependencia y su lockfile pertenecen únicamente a training-isolation; la app activa no cambia. Videos, adjuntos de evidencia e identidad/integración alojadas siguen pendientes.
+Fuentes del analizador: [PDF-LIB LoadOptions](https://pdf-lib.js.org/docs/api/interfaces/loadoptions) y [workers de Node](https://nodejs.org/api/worker_threads.html). La dependencia y su lockfile pertenecen únicamente a training-isolation; la app activa no cambia. Videos largos/otros formatos, adjuntos de evidencia e identidad/integración alojadas siguen pendientes.
+
+## Clips MP4 privados
+
+La Biblioteca admite Video MP4 privado, con reproducción manual y descarga autorizadas por revisión. Esta entrega acepta clips **progresivos de hasta 2 MiB y 60 segundos**, con video H.264 avc1 y audio AAC-LC opcional (mono/estéreo). Hasta 1280 píxeles por lado y 921600 píxeles de imagen; video de hasta 60 cuadros/segundo según sus tablas. No admite MP4 fragmentado, HEVC, WebM, pistas externas, múltiples pistas de video o más de una pista de audio. La estructura y los codecs compatibles forman un subconjunto; no se promete aceptar todos los MP4.
+
+El servidor verifica cajas/longitudes y marcas compatibles, duración del contenedor y de cada pista, tamaños/resolución declarados, configuración AVC/AAC, referencias de datos autocontenidas y tablas de tiempo/tamaño/chunks. Exige rangos dentro de mdat, número consistente de muestras y ausencia de rangos superpuestos. Limita cajas/muestras y rechaza base64 no canónico, archivos truncados, payload final arbitrario, offsets fuera del archivo y datos privados inconsistentes. La duración conservada es el máximo de las duraciones declaradas del contenedor/pistas; el navegador puede mostrar pequeñas diferencias por el relleno AAC.
+
+La validación es estructural y no decodifica los bits del video/audio ni usa FFmpeg en el servidor. Un archivo que cumple estas reglas todavía podría no reproducirse en un navegador determinado. La interfaz muestra un error del reproductor si ocurre; una descarga autorizada permite usar un reproductor compatible. No hay transcodificación, scanner de malware ni límite general de recursos de un servicio alojado. Los videos largos o grandes requieren otro almacenamiento y revisión antes de integración.
+
+El archivo se conserva completo, con sus metadatos originales, y la descarga usa un nombre generado por el servidor. El manifiesto training-private-mp4-v1 guarda bytes/base64, SHA-256, duración, dimensiones y audio en la tabla privada existente. kind=video ya pertenece al SQL de diseño: no hay cambios de tablas, huella, respaldo ni migraciones. El workspace entrega solo metadatos. Publicar material/programa, editar, previsualizar y descargar vuelve a verificar el manifiesto y los permisos. Se probó igualdad exacta tras reinicio y restauración.
+
+La vista previa usa un reproductor HTML local y una URL blob creada después de la consulta autenticada. CSP permite medios únicamente de blob y no hay fuentes remotas. No hay autoplay: el usuario decide cuándo reproducir. Cerrar la vista, renderizar otra vista, actualizar o salir pausa el video, elimina src y revoca su URL. No se guarda en localStorage/sessionStorage. Los controles ocultan la descarga nativa como indicación de interfaz, pero permitir reproducción no impide copiar bytes recibidos, capturar la pantalla ni conservar una descarga previa; no es DRM.
+
+| Ruta POST | Cuerpo | Permiso |
+|---|---|---|
+| /api/materials/video | topic_id, title, video_base64, allow_preview, allow_download; source_id opcional | Administrador; crea borrador/revisión |
+| /api/materials/preview | id | Personal activo, revisión visible y vista previa permitida |
+| /api/materials/download | id | Personal activo, revisión visible y descarga permitida |
+
+La carga MP4 comparte el límite base64 de 2 MiB más 8 KiB de metadatos; las rutas ordinarias continúan con 32 KiB. Se verificaron permisos, referencias exteriores, codecs/estructura falsos, límites, manifiesto corrupto, revisiones, programas y descarga exacta. Un clip sintético codificado por FFmpeg y examinado con ffprobe se reprodujo realmente en Chromium, con cuadros decodificados, audio silenciado en QA, ausencia de autoplay, consulta readonly móvil y limpieza de fuentes. FFmpeg se usó únicamente para producir el fixture, embebido en código de pruebas; no se añade como dependencia del paquete. [Captura móvil de reproducción](preview/training-video-mobile.png).
+
+Referencias de contenedor/reproducción: [ISO BMFF en W3C](https://www.w3.org/TR/mse-byte-stream-format-isobmff/) y [URLs blob para video en Chrome](https://developer.chrome.com/blog/ump). No se usa Media Source Extensions ni streaming fragmentado: se carga el archivo progresivo pequeño completo. Archivos adjuntos de evidencia, visor PDF e identidad/integración alojadas permanecen pendientes.
 
 ## Constructor de programas y agenda automática
 
@@ -236,7 +259,7 @@ Revocar o vencer el enlace bloquea status/start/submit incluso con un intento ab
 | /api/quiz/start | {} | Invitación vigente; intento limitado/idempotente |
 | /api/quiz/submit | attempt_id, answers [{question_id,selected_option}] | Misma invitación; corrección privada |
 
-Las peticiones ordinarias de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Solo las rutas de carga PNG y PDF admiten el base64 de un archivo de hasta 2 MiB más 8 KiB de metadatos JSON. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
+Las peticiones ordinarias de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Solo las rutas de carga PNG, PDF y MP4 admiten el base64 de un archivo de hasta 2 MiB más 8 KiB de metadatos JSON. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
 
 ## Cierre administrativo del entrenamiento
 
@@ -325,7 +348,7 @@ El almacenamiento local depende del disco y de ese entorno: no es persistencia c
 
 `bootstrap.sql` representa únicamente las claves UUID necesarias para el ensayo, no el esquema real de DatabasePad. `auth.uid()` se simula con un claim de sesión para probar RLS; no verifica tokens ni prueba el login. La ejecución en memoria no demuestra compatibilidad completa con Supabase/DatabasePad, Auth, Storage o PostgREST.
 
-La API ya implementa validación de prácticas, catálogo de texto/enlaces/imágenes PNG, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado, quiz final con corrección privada y cierre administrativo. Aún no implementa otros formatos de imagen, videos o diapositivas, archivos de evidencia ni emisión de constancias formales o PDF. Los formatos pendientes requieren ampliar el almacenamiento y la validación; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
+La API ya implementa validación de prácticas, catálogo de texto/enlaces/imágenes PNG/PDF/clips MP4, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado, quiz final con corrección privada y cierre administrativo. Aún no implementa otros formatos de imagen/video o diapositivas, archivos de evidencia ni emisión de constancias formales o PDF. Los formatos pendientes requieren ampliar el almacenamiento y la validación; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
 
 El primer fixture de RLS contiene una pregunta ficticia y prueba solo autorización. Los nuevos tests de publicación/corrección sí usan 50 preguntas reales del ejemplo DEMO y rechazan 49/51, claves inválidas y contenido duplicado. Los completions del primer test de RLS son fixtures de autorización; los tests HTTP, separados, sí exigen revisión y evaluación antes de completar una práctica. Faltan integración con identidad real de Supabase/DatabasePad, configuración del servicio alojado y pruebas de concurrencia en un entorno con múltiples conexiones. PGlite serializa las operaciones en una sola conexión; no se ha demostrado comportamiento distribuido.
 

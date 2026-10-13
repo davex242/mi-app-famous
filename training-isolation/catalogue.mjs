@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import {normalizePNG,loadPrivateImage} from './private-images.mjs';
 import {isPDFMaterial,validatePDF,loadPrivatePDF} from './private-pdfs.mjs';
+import {validateMP4,loadPrivateVideo} from './private-videos.mjs';
 
 // Called only by the sandbox service's verified-session transaction wrapper.
 export function createCatalogueOperations(run, { requireAdmin, fields, text, uuid, fail, audit, admin }) {
@@ -50,6 +51,7 @@ export function createCatalogueOperations(run, { requireAdmin, fields, text, uui
       if (parent.status !== 'published') fail(409, 'Publish the topic revision first');
       if (value.kind === 'document') {if(isPDFMaterial(value))await loadPrivatePDF(tx,value.id,fail);else await document(tx, value);}
       if (value.kind === 'image') await loadPrivateImage(tx,value.id,fail);
+      if (value.kind === 'video') await loadPrivateVideo(tx,value.id,fail);
     }
     const result = (await tx.query(`update public.training_${table} set status='published' where id=$1 returning *`, [value.id])).rows[0];
     const column = table === 'topics' ? 'topic_id' : 'material_id';
@@ -117,24 +119,39 @@ export function createCatalogueOperations(run, { requireAdmin, fields, text, uui
       await audit(tx,actor,revision===1?'material_created':'material_revised','materials',id,null,{format:'pdf',sha256:pdf.sha256,bytes:pdf.bytes,pages:pdf.pages});
       return value;
     }),
+    saveVideoMaterial:(token,body)=>run(token,async(tx,actor)=>{
+      requireAdmin(actor);fields(body,['source_id','topic_id','title','video_base64','allow_preview','allow_download']);
+      const parent=await row(tx,'topics',body.topic_id),title=text(body.title,120);
+      if(typeof body.allow_preview!=='boolean'||typeof body.allow_download!=='boolean')fail(400,'Invalid material permissions');
+      const video=validateMP4(body.video_base64,fail),{key,revision}=await nextRevision(tx,'materials',body.source_id),id=randomUUID();
+      const value=(await tx.query(`insert into public.training_materials(id,content_key,revision,topic_id,title,kind,storage_path,allow_preview,allow_download,created_by)
+        values($1,$2,$3,$4,$5,'video',$6,$7,$8,$9) returning *`,[id,key,revision,parent.id,title,`sandbox/materials/${id}.mp4`,body.allow_preview,body.allow_download,actor.app_user_id])).rows[0];
+      await tx.query('insert into training_private.local_material_content(material_id,body) values($1,$2)',[id,JSON.stringify(video)]);
+      await audit(tx,actor,revision===1?'material_created':'material_revised','materials',id,null,{format:'mp4',sha256:video.sha256,bytes:video.bytes,duration_seconds:video.duration_seconds,width:video.width,height:video.height,audio:video.audio});
+      return value;
+    }),
     publishMaterial: (token, body) => run(token, async (tx, actor) => {
       requireAdmin(actor); fields(body, ['id']); return publish(tx, actor, 'materials', uuid(body.id));
     }),
     materialEditData: (token, body) => run(token, async (tx, actor) => {
       requireAdmin(actor); fields(body, ['id']);
       const material = await row(tx, 'materials', body.id);
-      return { ...material, content: material.kind === 'document'&&!isPDFMaterial(material) ? await document(tx, material) : '',...(isPDFMaterial(material)?{pdf:await loadPrivatePDF(tx,material.id,fail)}:{}),...(material.kind==='image'?{image:await loadPrivateImage(tx,material.id,fail)}:{}) };
+      return { ...material,...(material.kind==='video'?{video:await loadPrivateVideo(tx,material.id,fail)}:{}), content: material.kind === 'document'&&!isPDFMaterial(material) ? await document(tx, material) : '',...(isPDFMaterial(material)?{pdf:await loadPrivatePDF(tx,material.id,fail)}:{}),...(material.kind==='image'?{image:await loadPrivateImage(tx,material.id,fail)}:{}) };
     }),
     previewMaterial: (token, body) => run(token, async (tx, actor) => {
       fields(body, ['id']); const material = await readableMaterial(tx, actor, body.id);
       if (!material.allow_preview||isPDFMaterial(material)) fail(403, 'Preview is disabled for this revision');
-      const result = material.kind === 'image'?{type:'image',image:await loadPrivateImage(tx,material.id,fail),mime:'image/png'}:material.kind === 'document' ? { type: 'text', content: await document(tx, material) } : { type: 'link', url: material.external_url };
+      const result = material.kind==='video'?{type:'video',video:await loadPrivateVideo(tx,material.id,fail),mime:'video/mp4'}:material.kind === 'image'?{type:'image',image:await loadPrivateImage(tx,material.id,fail),mime:'image/png'}:material.kind === 'document' ? { type: 'text', content: await document(tx, material) } : { type: 'link', url: material.external_url };
       await audit(tx, actor, 'material_previewed', 'materials', material.id);
       return { ...result, title: material.title, revision: material.revision };
     }),
     downloadMaterial: (token, body) => run(token, async (tx, actor) => {
       fields(body, ['id']); const material = await readableMaterial(tx, actor, body.id);
-      if (!['document','image'].includes(material.kind) || !material.allow_download) fail(403, 'Download is disabled for this revision');
+      if (!['document','image','video'].includes(material.kind) || !material.allow_download) fail(403, 'Download is disabled for this revision');
+      if(material.kind==='video'){
+        const video=await loadPrivateVideo(tx,material.id,fail);await audit(tx,actor,'material_downloaded','materials',material.id,null,{sha256:video.sha256});
+        return {video_base64:video.data,sha256:video.sha256,filename:`training-material-${material.id}-r${material.revision}.mp4`,mime:'video/mp4'};
+      }
       if(isPDFMaterial(material)){
         const pdf=await loadPrivatePDF(tx,material.id,fail);await audit(tx,actor,'material_downloaded','materials',material.id,null,{sha256:pdf.sha256});
         return {pdf_base64:pdf.data,sha256:pdf.sha256,filename:`training-material-${material.id}-r${material.revision}.pdf`,mime:'application/pdf'};

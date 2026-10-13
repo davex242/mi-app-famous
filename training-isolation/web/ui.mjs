@@ -11,6 +11,11 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Compatible MP4 H264 with optional AAC required':'Usa un MP4 progresivo compatible con H.264 y audio AAC opcional, sin pistas externas ni fragmentación.',
+  'Video exceeds 2 MiB limit':'El video debe pesar como máximo 2 MiB.',
+  'Video duration exceeds 60 seconds':'El clip debe durar como máximo 60 segundos.',
+  'Video dimensions exceed sandbox limit':'El video admite hasta 1280 píxeles por lado y 921600 píxeles en total.',
+  'Private video content unavailable':'No se pudo verificar el video privado de esta revisión.',
   'Static PDF without passwords, forms, actions or attachments required':'Usa un PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos, con 1 a 100 páginas.',
   'PDF exceeds 2 MiB limit':'El PDF debe pesar como máximo 2 MiB.',
   'Private PDF content unavailable':'No se pudo verificar el PDF privado de esta revisión.',
@@ -88,7 +93,13 @@ const closingUI=createClosingUI({state,esc,opt,empty,isAdmin,api,action,render,n
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.className = error ? 'error' : ''; node.hidden = false;
 }
+let materialVideoURL=null;
+function clearMaterialVideo(){
+  const video=$('#preview-video');if(video){video.onerror=null;video.pause();video.removeAttribute('src');video.load();}
+  if(materialVideoURL){URL.revokeObjectURL(materialVideoURL);materialVideoURL=null;}
+}
 function exitSession() {
+  clearMaterialVideo();
   state.token = null; state.actor = null; state.workspace = null;
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   programUI.reset();
@@ -116,6 +127,7 @@ async function refresh() {
   render();
 }
 function render() {
+  clearMaterialVideo();
   const w = state.workspace;
   $('#role-label').textContent = labels[state.actor.role];
   $('#workspace-title').textContent = isAdmin() ? 'Training Administration' : 'Recruiter Training Workspace';
@@ -181,8 +193,8 @@ function library() {
     const current = latest(all).some(row => row.id === value.id);
     const edit = isAdmin() ? `<button class="secondary" data-edit-${materials ? 'material' : 'topic'}="${esc(value.id)}" ${!current ? 'disabled' : ''}>Nueva revisión</button>` : '';
     const publish = isAdmin() && value.status === 'draft' && current ? `<button class="primary" data-publish-${materials ? 'material' : 'topic'}="${esc(value.id)}">Publicar</button>` : '';
-    const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || !['document','image'].includes(value.kind) ? 'disabled' : ''}>Descargar</button>` : '';
-    const detail = materials ? `${isPDF(value)?'Documento PDF':value.kind === 'image'?'Imagen PNG':value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
+    const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || !['document','image','video'].includes(value.kind) ? 'disabled' : ''}>Descargar</button>` : '';
+    const detail = materials ? `${value.kind==='video'?'Video MP4':isPDF(value)?'Documento PDF':value.kind === 'image'?'Imagen PNG':value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
     return `<article class="catalogue-card"><div class="catalogue-card-head"><div><h3>${esc(value.title)}</h3><p class="caption">${esc(detail)} · Revisión ${value.revision}</p></div>${pill(value.status)}</div>${!materials && value.description ? `<p class="caption">${esc(value.description)}</p>` : ''}<div class="actions">${access}${edit}${publish}</div></article>`;
   }).join('');
   let form = '';
@@ -193,9 +205,9 @@ function library() {
     const value = state.editMaterial;
     const topics = w.topics.filter(t => ['draft', 'published'].includes(t.status));
     const options = topics.map(t => `<option value="${esc(t.id)}" ${value?.topic_id === t.id ? 'selected' : ''}>${esc(t.title)} · r${t.revision} · ${esc(statuses[t.status])}</option>`).join('');
-    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Se admiten texto, enlaces HTTPS, imágenes y PDF privados. Los PDF se descargan sin visor integrado.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${!value||value.kind==='document'&&!isPDF(value) ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option><option value="image" ${value?.kind==='image'?'selected':''}>Imagen privada (PNG o JPEG)</option><option value="pdf" ${isPDF(value)?'selected':''}>Documento PDF privado</option></select></label><label id="material-text-field" ${value&&(value.kind!=='document'||isPDF(value)) ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${!value||value.kind==='document'&&!isPDF(value) ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label id="material-image-field" ${value?.kind!=='image'?'hidden':''}>Imagen PNG o JPEG<input name="image_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" ${value?.kind==='image'&&!value?.image?'required':''}><small>Máximo 2 MiB, 2048 píxeles por lado y 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce, si hace falta, hasta 768 píxeles por lado. Se conserva la proporción y se eliminan los metadatos; la descarga será PNG.${value?.image?' Puedes conservar la imagen actual o elegir otra para esta revisión.':''}</small></label><label id="material-pdf-field" ${!isPDF(value)?'hidden':''}>Archivo PDF<input name="pdf_file" type="file" accept="application/pdf,.pdf" ${isPDF(value)&&!value?.pdf?'required':''}><small>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Esta entrega permite descarga, sin visor integrado.${value?.pdf?' Puedes conservar el PDF actual o elegir otro para esta revisión.':''}</small></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false&&!isPDF(value) ? 'checked' : ''} ${isPDF(value)?'disabled':''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
+    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Se admiten texto, enlaces HTTPS, imágenes, PDF y clips MP4 privados. Los PDF se descargan sin visor integrado.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${!value||value.kind==='document'&&!isPDF(value) ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option><option value="image" ${value?.kind==='image'?'selected':''}>Imagen privada (PNG o JPEG)</option><option value="pdf" ${isPDF(value)?'selected':''}>Documento PDF privado</option><option value="video" ${value?.kind==='video'?'selected':''}>Video MP4 privado</option></select></label><label id="material-text-field" ${value&&(value.kind!=='document'||isPDF(value)) ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${!value||value.kind==='document'&&!isPDF(value) ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label id="material-image-field" ${value?.kind!=='image'?'hidden':''}>Imagen PNG o JPEG<input name="image_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" ${value?.kind==='image'&&!value?.image?'required':''}><small>Máximo 2 MiB, 2048 píxeles por lado y 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce, si hace falta, hasta 768 píxeles por lado. Se conserva la proporción y se eliminan los metadatos; la descarga será PNG.${value?.image?' Puedes conservar la imagen actual o elegir otra para esta revisión.':''}</small></label><label id="material-pdf-field" ${!isPDF(value)?'hidden':''}>Archivo PDF<input name="pdf_file" type="file" accept="application/pdf,.pdf" ${isPDF(value)&&!value?.pdf?'required':''}><small>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Esta entrega permite descarga, sin visor integrado.${value?.pdf?' Puedes conservar el PDF actual o elegir otro para esta revisión.':''}</small></label><label id="material-video-field" ${value?.kind!=='video'?'hidden':''}>Clip MP4<input name="video_file" type="file" accept="video/mp4,.mp4" ${value?.kind==='video'&&!value?.video?'required':''}><small>Máximo 2 MiB y 60 segundos. MP4 progresivo H.264 con audio AAC opcional; hasta 1280 píxeles por lado y 921600 píxeles en total. Se conserva el archivo y sus metadatos originales. La reproducción comienza solo al pulsar Reproducir.${value?.video?' Puedes conservar el clip actual o elegir otro para esta revisión.':''}</small></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false&&!isPDF(value) ? 'checked' : ''} ${isPDF(value)?'disabled':''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
   }
-  return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><img id="preview-image" alt="Material de entrenamiento" hidden><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
+  return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><img id="preview-image" alt="Material de entrenamiento" hidden><video id="preview-video" controls playsinline preload="metadata" controlslist="nodownload noremoteplayback" disablepictureinpicture hidden></video><p id="preview-video-error" class="error" role="alert" hidden>Este navegador no puede reproducir el clip. Si la revisión permite descargar, puedes usar un reproductor compatible.</p><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
 }
 function history() {
   const w = state.workspace;
@@ -224,7 +236,7 @@ $('#refresh-button').addEventListener('click', async () => { try { await refresh
 $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
-$('#content').addEventListener('close',event=>{if(event.target.id==='material-preview')$('#preview-image')?.removeAttribute('src');},true);
+$('#content').addEventListener('close',event=>{if(event.target.id==='material-preview'){clearMaterialVideo();$('#preview-image')?.removeAttribute('src');}},true);
 $('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
   closingUI.handleChange(event);
@@ -237,12 +249,13 @@ $('#content').addEventListener('change', event => {
   }
   if (event.target.id === 'catalogue-history') { state.catalogueHistory = event.target.checked; render(); }
   if (event.target.matches('#material-form [name="kind"]')) {
-    const link = event.target.value === 'link',image=event.target.value==='image',pdf=event.target.value==='pdf';
-    $('#material-text-field').hidden = link||image||pdf; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;$('#material-image-field').hidden=!image;
+    const link = event.target.value === 'link',image=event.target.value==='image',pdf=event.target.value==='pdf',video=event.target.value==='video';
+    $('#material-text-field').hidden = link||image||pdf||video; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;$('#material-image-field').hidden=!image;
     $('#material-form [name="image_file"]').required=image&&!state.editMaterial?.image;
+    $('#material-video-field').hidden=!video;$('#material-form [name="video_file"]').required=video&&!state.editMaterial?.video;
     $('#material-pdf-field').hidden=!pdf;$('#material-form [name="pdf_file"]').required=pdf&&!state.editMaterial?.pdf;
     $('#material-form [name="allow_preview"]').disabled=pdf;if(pdf)$('#material-form [name="allow_preview"]').checked=false;
-    $('#material-form [name="content"]').required = !link&&!image&&!pdf; $('#material-form [name="external_url"]').required = link;
+    $('#material-form [name="content"]').required = !link&&!image&&!pdf&&!video; $('#material-form [name="external_url"]').required = link;
     $('#material-form [name="allow_download"]').checked = !link;
   }
 });
@@ -267,7 +280,17 @@ $('#content').addEventListener('submit', async event => {
     const body = { title: data.title, topic_id: data.topic_id, kind: data.kind, allow_preview: form.elements.allow_preview.checked,
       allow_download: !link && form.elements.allow_download.checked, ...(link ? { external_url: data.external_url } : { content: data.content }),
       ...(state.editMaterial ? { source_id: state.editMaterial.id } : {}) };
-    if(data.kind==='pdf'){
+    if(data.kind==='video'){
+      if(state.busy)return;state.busy=true;const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const file=form.elements.video_file.files[0];let video_base64=state.editMaterial?.video?.data;
+        if(file){if(file.size>2*1024*1024)throw Error(errors['Video exceeds 2 MiB limit']);const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));video_base64=btoa(binary);}
+        if(!video_base64)throw Error('Selecciona un clip MP4.');
+        const {kind,content,...videoBody}=body;state.busy=false;
+        action('/api/materials/video',{...videoBody,video_base64},'Borrador de video creado.',()=>{state.editMaterial=null;});
+      }catch(e){state.busy=false;button.disabled=false;notify(e.message,true);}
+    }else if(data.kind==='pdf'){
+
       if(state.busy)return;state.busy=true;const button=form.querySelector('button[type="submit"]');button.disabled=true;
       try{
         const file=form.elements.pdf_file.files[0];let pdf_base64=state.editMaterial?.pdf?.data;
@@ -303,7 +326,7 @@ $('#content').addEventListener('click', async event => {
   if (button.dataset.editTopic) { state.editTopic = state.workspace.topics.find(t => t.id === button.dataset.editTopic); render(); $('#topic-form input').focus(); }
   if (button.dataset.publishTopic) action('/api/topics/publish', { id: button.dataset.publishTopic }, 'Tema publicado.');
   if (button.dataset.publishMaterial) action('/api/materials/publish', { id: button.dataset.publishMaterial }, 'Material publicado.');
-  if (button.hasAttribute('data-close-preview')) {$('#preview-image').removeAttribute('src');$('#material-preview').close();}
+  if (button.hasAttribute('data-close-preview')) {clearMaterialVideo();$('#preview-image').removeAttribute('src');$('#material-preview').close();}
   if (button.dataset.editMaterial || button.dataset.previewMaterial || button.dataset.downloadMaterial) {
     state.busy = true;
     try {
@@ -311,6 +334,8 @@ $('#content').addEventListener('click', async event => {
         state.editMaterial = await api('/api/materials/edit-data', { id: button.dataset.editMaterial }); render(); $('#material-form input').focus();
       } else if (button.dataset.previewMaterial) {
         const result = await api('/api/materials/preview', { id: button.dataset.previewMaterial });
+        clearMaterialVideo();$('#preview-video').hidden=result.type!=='video';$('#preview-video-error').hidden=true;
+        if(result.type==='video'){materialVideoURL=URL.createObjectURL(new Blob([Uint8Array.from(atob(result.video.data),c=>c.charCodeAt(0))],{type:'video/mp4'}));$('#preview-video').onerror=()=>{$('#preview-video-error').hidden=false;};$('#preview-video').src=materialVideoURL;}
         $('#preview-title').textContent = `${result.title} · Revisión ${result.revision}`;
         $('#preview-text').hidden = result.type !== 'text'; $('#preview-link').hidden = result.type !== 'link';
         $('#preview-image').hidden=result.type!=='image';$('#preview-image').removeAttribute('src');if(result.type==='image')$('#preview-image').src='data:image/png;base64,'+result.image.data;
@@ -319,9 +344,9 @@ $('#content').addEventListener('click', async event => {
         $('#material-preview').showModal();
       } else {
         const result = await api('/api/materials/download', { id: button.dataset.downloadMaterial });
-        const url = URL.createObjectURL(new Blob([result.image_base64||result.pdf_base64?Uint8Array.from(atob(result.image_base64||result.pdf_base64),c=>c.charCodeAt(0)):result.content], { type: result.mime }));
+        const url = URL.createObjectURL(new Blob([result.image_base64||result.pdf_base64||result.video_base64?Uint8Array.from(atob(result.image_base64||result.pdf_base64||result.video_base64),c=>c.charCodeAt(0)):result.content], { type: result.mime }));
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename; anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000); notify(result.pdf_base64?'Descarga del PDF iniciada.':result.image_base64?'Descarga de la imagen PNG iniciada.':'Descarga del documento de texto iniciada.');
+        setTimeout(() => URL.revokeObjectURL(url), 1000); notify(result.video_base64?'Descarga del video MP4 iniciada.':result.pdf_base64?'Descarga del PDF iniciada.':result.image_base64?'Descarga de la imagen PNG iniciada.':'Descarga del documento de texto iniciada.');
       }
     } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
     finally { state.busy = false; }
