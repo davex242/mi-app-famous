@@ -2,7 +2,10 @@
   "name": "host-training-isolated-tests",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test isolation.test.mjs" },
+  "scripts": {
+    "test": "node --test isolation.test.mjs api.test.mjs",
+    "start": "node server.mjs"
+  },
   "devDependencies": { "@electric-sql/pglite": "0.5.9" },
   "engines": { "node": ">=20" }
 }
