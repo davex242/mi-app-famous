@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,mkdir,mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright';
+const projectRoot=fileURLToPath(new URL('../',import.meta.url));
+const moduleRoot=process.env.APP_NODE_MODULES || join(projectRoot,'node_modules');
+const appRequire=createRequire(join(moduleRoot,'_training_qa.cjs'));
+const {build}=appRequire('esbuild');
+const temp=await mkdtemp(join(tmpdir(),'training-react-demo-'));
+const entry=join(temp,'entry.tsx');
+await writeFile(entry,`import React from 'react';import {createRoot} from 'react-dom/client';import Training from ${JSON.stringify(join(projectRoot,'src/components/HostTrainingDevelopment.tsx'))};createRoot(document.getElementById('root')).render(<main style={{padding:24,background:'#f5f6fa'}}><Training/></main>);`);
+await build({entryPoints:[entry],bundle:true,outfile:join(temp,'bundle.js'),nodePaths:[moduleRoot],plugins:[{name:'synthetic-auth',setup(build){build.onResolve({filter:/^@\/context\/AuthContext$/},()=>({path:'auth',namespace:'training-demo'}));build.onLoad({filter:/.*/,namespace:'training-demo'},()=>({contents:`const role=new URLSearchParams(location.search).get('role');const user=role==='signedout'?null:{id:'demo-actor',role,name:'DEMO'};export function useAuth(){return {user};}`,loader:'js'}));}}]});
+const tailwind=appRequire('tailwindcss'),postcss=appRequire('postcss');
+const css=await postcss([tailwind({content:[join(projectRoot,'src/components/HostTrainingDevelopment.tsx'),join(projectRoot,'src/components/training/*.tsx')],theme:{extend:{}},plugins:[]})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined});
+await writeFile(join(temp,'tailwind-built.css'),css.css);
+await writeFile(join(temp,'index.html'),'<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/tailwind-built.css"><link rel="stylesheet" href="/bundle.css"><div id="root"></div><script src="/bundle.js"></script></html>');
+const server=createServer(async(req,res)=>{try{const path=new URL(req.url,'http://localhost').pathname,name=path==='/'?'index.html':path.slice(1);if(!['index.html','bundle.js','bundle.css','tailwind-built.css'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(await readFile(join(temp,name)));}catch{res.writeHead(500).end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`,errors=[],remote=[];
+const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE_PATH?{executablePath:process.env.BROWSER_EXECUTABLE_PATH}:{}),args:['--no-sandbox']});let checks=0;
+function check(condition,message){assert.ok(condition,message);checks++;}
+const screenshotDir=process.env.UI_SCREENSHOT_DIR || join(temp,'preview');await mkdir(screenshotDir,{recursive:true});
+try{
+for(const role of ['superadmin','subadmin','edit','readonly','unknown','signedout']){
+const page=await browser.newPage({viewport:{width:1440,height:1100},locale:'es-CR',timezoneId:'America/Costa_Rica'});page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',r=>{if(!r.request().url().startsWith(base) || !['/','/bundle.js','/bundle.css','/tailwind-built.css'].includes(new URL(r.request().url()).pathname)){remote.push(r.request().url());return r.abort();}return r.continue();});await page.goto(base+'/?role='+role);
+if(role==='unknown' || role==='signedout'){check(await page.locator('.training-demo').count()===0,'Unknown role must not mount training');check(await page.getByText('Access restricted',{exact:true}).count()===1,'Access restriction visible');await page.close();continue;}
+const module=page.locator('.training-demo'),admin=['superadmin','subadmin'].includes(role),readonly=role==='readonly';await module.waitFor();check(await module.locator('nav button').count()===9,'All nine sections mounted');check(await module.locator('.td-trainee').count()===(admin?3:2),'Synthetic scope reflects role');check(await module.locator('.td-notice').textContent().then(s=>s.includes('Datos ficticios')),'DEMO disclosure');
+const tab=label=>module.getByRole('navigation').getByRole('button',{name:label,exact:true});
+for(const label of ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial']){
+await tab(label).click();check(await tab(label).getAttribute('aria-current')==='page','Active navigation marker');check(await module.locator('button').evaluateAll(nodes=>nodes.filter(n=>/Guardar|Enviar a revisión|Registrar revisión|Confirmar cierre|publicar|Inscribir|Crear invitación/i.test(n.textContent)).every(n=>n.disabled)),'Operational actions disabled');await page.setViewportSize({width:390,height:844});check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile section fits');await page.setViewportSize({width:1440,height:1100});}
+await tab('Programas').click();check(await module.getByText('Borrador',{exact:true}).count()===(admin?1:0),'Draft hidden for non-admin');
+await tab('Agenda').click();await module.getByLabel('Agenda: emisor',{exact:true}).selectOption('demo-trainee-2');check(await module.locator('tbody tr').count()===1,'Agenda trainee filter');await module.getByLabel('Agenda: estado',{exact:true}).selectOption('pending');check(await module.getByText('Sin sesiones para estos filtros.',{exact:true}).count()===1,'Agenda empty filter');check(await module.getByText('Registrar asistencia',{exact:true}).count()===(readonly?0:1),'Readonly attendance actions absent');
+await tab('Evidencias').click();await module.getByLabel('Evidencias: estado',{exact:true}).selectOption('pending');check(await module.locator('.td-evidence').count()===1,'Evidence status filter');if(admin){await module.getByLabel('Notas de revisión',{exact:true}).fill('DEMO · notas sin enviar');await module.getByLabel('Evidencias: estado',{exact:true}).selectOption('approved');await module.getByLabel('Evidencias: estado',{exact:true}).selectOption('pending');check(await module.getByLabel('Notas de revisión',{exact:true}).inputValue()==='DEMO · notas sin enviar','Unsent notes retained through filters');}else check(await module.getByLabel('Notas de revisión',{exact:true}).count()===0,'Non-admin review form absent');check(await module.locator('input[type=file]').count()===0,'No real uploads');
+await tab('Biblioteca').click();await module.getByRole('button',{name:'Vista previa DEMO',exact:true}).first().click();check(await module.locator('dialog').isVisible(),'Native dialog opens');await page.keyboard.press('Escape');check(!await module.locator('dialog').isVisible(),'Escape closes dialog');const downloading=page.waitForEvent('download');await module.getByRole('button',{name:'Descargar ejemplo TXT',exact:true}).first().click();const download=await downloading;check((await readFile(await download.path(),'utf8')).startsWith('CONTENIDO DEMO'),'Download contains only DEMO text');
+await tab('Cierre').click();await module.getByLabel('Emisor en entrenamiento',{exact:true}).selectOption('demo-trainee-2');await module.getByRole('button',{name:'Revisar requisitos DEMO',exact:true}).click();check(await module.getByText('Requisitos completos en el ejemplo',{exact:true}).count()===1,'Synthetic closing checklist');check(await module.getByRole('button',{name:'Confirmar cierre del entrenamiento',exact:true}).count()===(admin?1:0),'Confirmation admin-only');if(admin)check(await module.getByRole('button',{name:'Confirmar cierre del entrenamiento',exact:true}).isDisabled(),'No real closing');
+check(await page.evaluate(()=>localStorage.length+sessionStorage.length)===0,'No browser persistence');
+if(role==='superadmin'){await tab('Resumen').click();await page.screenshot({path:join(screenshotDir,'training-react-overview.png'),fullPage:true});await tab('Evidencias').click();await page.screenshot({path:join(screenshotDir,'training-react-evidence.png'),fullPage:true});await tab('Cierre').click();await module.getByRole('button',{name:'Revisar requisitos DEMO',exact:true}).click();await page.screenshot({path:join(screenshotDir,'training-react-closing.png'),fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(screenshotDir,'training-react-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1100});
+}
+await page.close();console.log(role+': native React DEMO checks passed');
+}
+check(errors.length===0,'No JavaScript errors');check(remote.length===0,'No external requests');console.log(`${checks} checks passed; no backend calls, writes or external requests.`);
+}finally{await browser.close();await new Promise(r=>server.close(r));await rm(temp,{recursive:true,force:true});}

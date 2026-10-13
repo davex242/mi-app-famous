@@ -5,12 +5,12 @@ import TrainingAdministration from './training/TrainingAdministration';
 import RecruiterTrainingWorkspace from './training/RecruiterTrainingWorkspace';
 
 /**
- * Host Training & Development — Stage 1 skeleton (UI only, no backend).
+ * Host Training & Development — native React DEMO (synthetic data, no backend calls).
  *
  * The workspace is chosen from the authenticated role and the *other* workspace
  * component is never mounted, so its content is not rendered for unauthorized roles
  * (not merely hidden). NOTE: auth in this app is client-side, so real enforcement
- * must come from server-side RLS in Stage 2.
+ * must come from the future verified server integration, not this DEMO.
  *
  *  - superadmin / subadmin -> Training Administration
  *  - edit                  -> Recruiter Training Workspace
@@ -26,15 +26,15 @@ export default function HostTrainingDevelopment() {
 
   if (role === 'superadmin' || role === 'subadmin') {
     title = 'Training Administration';
-    subtitle = 'Manage topics, materials, programs and approvals.';
+    subtitle = 'Programas, prácticas y evaluación en una vista DEMO.';
     body = <TrainingAdministration />;
   } else if (role === 'edit') {
     title = 'Recruiter Training Workspace';
-    subtitle = 'Follow your trainees, agenda and training library.';
+    subtitle = 'Tu agenda, tus emisores de ejemplo y su próximo paso.';
     body = <RecruiterTrainingWorkspace />;
   } else if (role === 'readonly') {
     title = 'Recruiter Training Workspace';
-    subtitle = 'Read-only view.';
+    subtitle = 'Consulta de solo lectura con datos ficticios.';
     body = <RecruiterTrainingWorkspace readOnly />;
   } else {
     body = (
@@ -62,3 +62,4 @@ export default function HostTrainingDevelopment() {
     </div>
   );
 }
+

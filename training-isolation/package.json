@@ -10,7 +10,8 @@
     "backup:local": "node local-runtime.mjs backup",
     "restore:local": "node local-runtime.mjs restore",
     "upgrade:local": "node local-runtime.mjs upgrade",
-    "test:journey": "node --expose-gc --test --test-concurrency=1 journey-ui.test.mjs"
+    "test:journey": "node --expose-gc --test --test-concurrency=1 journey-ui.test.mjs",
+    "test:react-demo": "node react-demo-ui.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",

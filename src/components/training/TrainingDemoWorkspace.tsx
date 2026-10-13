@@ -1,0 +1,89 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { DEMO_TRAINEES, DEMO_PROGRAMS, DEMO_SESSIONS, DEMO_EVIDENCE, DEMO_MATERIALS } from './demoData';
+import './TrainingDemoWorkspace.css';
+
+type Tab = 'overview' | 'programs' | 'agenda' | 'evidence' | 'library' | 'updates' | 'exams' | 'closing' | 'history';
+type Mode = 'admin' | 'recruiter' | 'readonly';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Resumen' }, { id: 'programs', label: 'Programas' },
+  { id: 'agenda', label: 'Agenda' }, { id: 'evidence', label: 'Evidencias' },
+  { id: 'library', label: 'Biblioteca' }, { id: 'updates', label: 'Actualizaciones' },
+  { id: 'exams', label: 'Quiz final' }, { id: 'closing', label: 'Cierre' },
+  { id: 'history', label: 'Historial' },
+];
+const STATUS: Record<string, string> = { active: 'En curso', paused: 'En pausa', scheduled: 'Programada', rescheduled: 'Reprogramada', completed: 'Completada', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', published: 'Publicado', draft: 'Borrador' };
+const when = (value: string) => new Intl.DateTimeFormat('es-CR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+function Badge({ status }: { status: string }) { return <span className={`td-badge td-${status}`}>{STATUS[status] || status}</span>; }
+function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="td-panel"><h2>{title}</h2>{children}</section>; }
+function Disabled({ children }: { children: React.ReactNode }) { return <button type="button" className="td-primary" disabled title="Acción deshabilitada en esta vista DEMO">{children}</button>; }
+
+/** Native React view-only DEMO. No API client, live records, persistent storage or answer keys. */
+export default function TrainingDemoWorkspace({ mode }: { mode: Mode }) {
+  const admin = mode === 'admin', readOnly = mode === 'readonly';
+  const [tab, setTab] = useState<Tab>('overview');
+  const [agendaTrainee, setAgendaTrainee] = useState('');
+  const [agendaStatus, setAgendaStatus] = useState('all');
+  const [evidenceTrainee, setEvidenceTrainee] = useState('');
+  const [evidenceStatus, setEvidenceStatus] = useState('all');
+  const [closingTrainee, setClosingTrainee] = useState('demo-trainee-1');
+  const [reviewed, setReviewed] = useState(false);
+  const [material, setMaterial] = useState<(typeof DEMO_MATERIALS)[number] | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [reviewDecisions, setReviewDecisions] = useState<Record<string, string>>({});
+  const dialog = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const trainees = admin ? DEMO_TRAINEES : DEMO_TRAINEES.slice(0, 2);
+  const allowedIds = new Set(trainees.map(t => t.id));
+  const sessions = DEMO_SESSIONS.filter(s => allowedIds.has(s.traineeId));
+  const evidence = DEMO_EVIDENCE.filter(e => allowedIds.has(e.traineeId));
+  const name = (id: string) => trainees.find(t => t.id === id)?.name || 'Emisor DEMO';
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  useEffect(() => { if (material) dialog.current?.showModal(); else dialog.current?.close(); }, [material]);
+  const go = (next: Tab) => { setTab(next); setReviewed(false); heading.current?.focus(); };
+  function traineeOptions(all = true) { return <>{all && <option value="">Todos los entrenamientos</option>}{trainees.map(t => <option key={t.id} value={t.id}>{t.name} · Programa v{t.version}</option>)}</>; }
+  function downloadMaterial(item: (typeof DEMO_MATERIALS)[number]) {
+    const url = URL.createObjectURL(new Blob([item.content], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = `${item.id}.txt`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const filters = (kind: 'agenda' | 'evidence') => <div className="td-filters">
+    <label>Emisor en entrenamiento<select aria-label={`${kind === 'agenda' ? 'Agenda' : 'Evidencias'}: emisor`} value={kind === 'agenda' ? agendaTrainee : evidenceTrainee} onChange={e => kind === 'agenda' ? setAgendaTrainee(e.target.value) : setEvidenceTrainee(e.target.value)}>{traineeOptions()}</select></label>
+    <label>{kind === 'agenda' ? 'Mostrar sesiones' : 'Estado de revisión'}<select aria-label={`${kind === 'agenda' ? 'Agenda' : 'Evidencias'}: estado`} value={kind === 'agenda' ? agendaStatus : evidenceStatus} onChange={e => kind === 'agenda' ? setAgendaStatus(e.target.value) : setEvidenceStatus(e.target.value)}>
+      {(kind === 'agenda' ? [['all', 'Todas'], ['pending', 'Programadas y reprogramadas'], ['unrecorded', 'Sin asistencia registrada'], ['completed', 'Completadas']] : [['all', 'Todas las evidencias'], ['pending', 'Pendientes de revisión'], ['approved', 'Aprobadas'], ['rejected', 'Rechazadas']]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+    </select></label>
+  </div>;
+  let view: React.ReactNode;
+  if (tab === 'overview') view = <>
+    <section className="td-start"><p className="td-eyebrow">TU PRÓXIMO PASO</p><h2>Todo el seguimiento, en un lugar</h2><p>Agenda, práctica y evaluación para acompañar a tus emisores.</p><div className="td-shortcuts">{(['agenda', 'evidence', 'exams'] as Tab[]).map((id, i) => <button key={id} type="button" onClick={() => go(id)}><strong>{['Agenda y asistencia', admin ? 'Revisar evidencias' : 'Evidencias prácticas', 'Quiz final'][i]} →</strong><span>{['Consulta las sesiones y la asistencia.', 'Sigue las revisiones y las correcciones.', 'Consulta la evaluación de 50 preguntas.'][i]}</span></button>)}</div></section>
+    <Panel title="Emisores en entrenamiento">{trainees.map(t => <article className="td-trainee" key={t.id}><div><h3>{t.name}</h3><p>{t.program} · {t.timezone}</p><label>Prácticas validadas · {t.completed} de {t.total}<progress max={t.total} value={t.completed} aria-label={`Progreso de ${t.name}`} /></label><small>El quiz y el cierre se revisan por separado.</small></div><Badge status={t.status} /></article>)}</Panel>
+    {!readOnly && <Panel title="Nueva inscripción"><p>Ejemplo de la selección de emisor y programa.</p><div className="td-filters"><label>Emisor<select>{traineeOptions(false)}</select></label><label>Programa<select>{DEMO_PROGRAMS.filter(p => p.status === 'published').map(p => <option key={p.id}>{p.title}</option>)}</select></label></div><Disabled>Inscribir emisor</Disabled></Panel>}
+  </>;
+  else if (tab === 'programs') view = <Panel title="Programas de entrenamiento"><p>Las inscripciones conservan su versión. Una nueva versión no cambia el progreso automáticamente.</p>{DEMO_PROGRAMS.filter(p => admin || p.status === 'published').map(p => <article className="td-program" key={p.id}><div className="td-row-head"><div><h3>{p.title}</h3><p>Versión {p.version} · {p.days} días · {p.note}</p></div><Badge status={p.status} /></div><div className="td-days">{Array.from({ length: p.days }, (_, i) => <div key={i}><span>DÍA {i + 1}</span><strong>Práctica {i + 1}</strong><small>Contenido DEMO</small></div>)}</div></article>)}{admin && <Disabled>Crear o publicar programa</Disabled>}<div className="td-review"><h3>Entrenamientos libres</h3><p>Prácticas fuera del programa, con su propia evidencia e historial.</p>{!readOnly && <Disabled>Registrar entrenamiento libre</Disabled>}</div></Panel>;
+  else if (tab === 'agenda') {
+    const rows = sessions.filter(s => (!agendaTrainee || s.traineeId === agendaTrainee) && (agendaStatus === 'all' || agendaStatus === 'pending' && ['scheduled', 'rescheduled'].includes(s.status) || agendaStatus === 'unrecorded' && !s.attendance || agendaStatus === 'completed' && s.status === 'completed'));
+    view = <><Panel title="Agenda de entrenamiento"><p>Las horas se muestran en tu zona: {zone}.</p>{filters('agenda')}<p role="status">{rows.length} de {sessions.length} sesiones visibles</p>{rows.length ? <div className="td-table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th><th>Asistencia</th></tr></thead><tbody>{rows.map(s => <tr key={s.id}><td>{name(s.traineeId)}<small>{s.topic}</small></td><td>{when(s.at)}<small>{s.minutes} minutos</small></td><td><Badge status={s.status} /></td><td>{s.attendance || 'Sin registro'}</td></tr>)}</tbody></table></div> : <p className="td-empty">Sin sesiones para estos filtros.</p>}</Panel>
+      {!readOnly && <div className="td-columns"><Panel title="Registrar asistencia"><label>Sesión<select>{sessions.map(s => <option key={s.id}>{name(s.traineeId)} · {s.topic}</option>)}</select></label><label>Asistencia<select><option>Presente</option><option>Ausente</option><option>Tarde</option><option>Justificada</option></select></label><Disabled>Guardar asistencia</Disabled></Panel><Panel title="Reprogramar sesión"><label>Sesión<select>{sessions.filter(s => s.status !== 'completed').map(s => <option key={s.id}>{name(s.traineeId)} · {s.topic}</option>)}</select></label><label>Nueva fecha y hora<input type="datetime-local" /></label><label>Motivo<input type="text" /></label><Disabled>Guardar reprogramación</Disabled></Panel></div>}
+    </>;
+  } else if (tab === 'evidence') {
+    const rows = evidence.filter(e => (!evidenceTrainee || e.traineeId === evidenceTrainee) && (evidenceStatus === 'all' || e.status === evidenceStatus));
+    view = <><Panel title="Evidencias y revisiones"><p>{admin ? 'Revisa las prácticas pendientes y deja indicaciones concretas para mejorar.' : 'Consulta la revisión de cada práctica y las correcciones solicitadas.'}</p><div className="td-metrics">{[['pending', 'Pendientes'], ['approved', 'Aprobadas'], ['rejected', 'Rechazadas']].map(([status, label]) => <article key={status}><strong>{evidence.filter(e => e.status === status).length}</strong><span>{label}</span></article>)}</div>{filters('evidence')}<p role="status">{rows.length} de {evidence.length} evidencias visibles</p><div className="td-cards">{rows.map(e => <article className="td-evidence" key={e.id}><Badge status={e.status} /><small>{name(e.traineeId)} · {when(e.at)}</small><h3>{e.topic}</h3><p>{e.description}</p><p>Ejemplo de archivo privado · {e.format}</p>{e.notes && <p><strong>Revisión:</strong> {e.notes}</p>}{admin && e.status === 'pending' && <div className="td-review"><label>Decisión<select value={reviewDecisions[e.id] || "approved"} onChange={event => setReviewDecisions(previous => ({ ...previous, [e.id]: event.target.value }))}><option value="approved">Aprobar práctica</option><option value="rejected">Rechazar y solicitar corrección</option></select></label><label htmlFor={`td-review-notes-${e.id}`}>Notas de revisión</label><textarea id={`td-review-notes-${e.id}`} value={reviewNotes[e.id] || ""} onChange={event => setReviewNotes(previous => ({ ...previous, [e.id]: event.target.value }))} /><Disabled>Registrar revisión</Disabled></div>}</article>)}</div>{!rows.length && <p className="td-empty">Sin evidencias para estos filtros.</p>}</Panel>
+      {!readOnly && <Panel title="Envía una práctica"><label>Sesión<select>{sessions.map(s => <option key={s.id}>{name(s.traineeId)} · {s.topic}</option>)}</select></label><label>Descripción de la práctica<textarea placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…" /></label><p>Esta vista no permite seleccionar ni subir archivos reales.</p><Disabled>Enviar a revisión</Disabled></Panel>}
+    </>;
+  } else if (tab === 'library') view = <Panel title="Biblioteca de entrenamiento"><p>Documentos de ejemplo, sin archivos reales de emisores.</p>{DEMO_MATERIALS.map(item => <article className="td-program" key={item.id}><h3>{item.title}</h3><p>{item.topic} · Documento {item.format}</p><div className="td-actions"><button type="button" onClick={() => setMaterial(item)}>Vista previa DEMO</button><button type="button" onClick={() => downloadMaterial(item)}>Descargar ejemplo TXT</button></div></article>)}{admin && <Disabled>Crear o publicar material</Disabled>}</Panel>;
+  else if (tab === 'updates') view = <Panel title="Actualizaciones del programa"><span className="td-badge">DEMO · No aplicada</span><h3>Bienvenida y networking · v1 → v2</h3><p>Ejemplo de actualización opcional. Las prácticas ya realizadas deben revisarse por equivalencia antes de conservar su validación.</p><ul><li>La inscripción mantiene su versión actual.</li><li>Las fechas e historial se conservan al aplicar una actualización compatible.</li><li>La aceptación requiere una revisión previa.</li></ul>{!readOnly && <Disabled>Revisar y aplicar actualización</Disabled>}</Panel>;
+  else if (tab === 'exams') view = <Panel title="Quiz final · 50 preguntas"><p>Los resultados siguientes son ficticios. Esta vista no califica respuestas ni genera enlaces públicos.</p><div className="td-cards">{trainees.map(t => <article className="td-evidence" key={t.id}><h3>{t.name}</h3><p>{t.program} · Versión {t.version}</p><strong className="td-score">{t.quiz === null ? 'Pendiente' : `${t.quiz}%`}</strong><p>{t.quiz === null ? 'Sin resultado DEMO.' : 'Resultado DEMO · Umbral de ejemplo: 80%.'}</p>{!readOnly && <Disabled>Crear invitación temporal</Disabled>}</article>)}</div>{admin && <div className="td-review"><h3>Publicación administrativa</h3><p>El quiz requiere 50 preguntas y un umbral de aprobación explícito. Las respuestas correctas deben permanecer en el servidor.</p><Disabled>Revisar banco de preguntas y publicar</Disabled></div>}</Panel>;
+  else if (tab === 'closing') {
+    const t = trainees.find(item => item.id === closingTrainee) || trainees[0];
+    const practicesReady = t.completed === t.total, quizReady = t.quiz !== null && t.quiz >= 80, ready = practicesReady && quizReady && t.status === 'active';
+    view = <><Panel title="Revisar requisitos antes del cierre"><p>Las prácticas y el quiz se revisan por separado. Esta consulta muestra únicamente requisitos ficticios.</p><label htmlFor="td-closing-trainee">Emisor en entrenamiento</label><select id="td-closing-trainee" aria-label="Emisor en entrenamiento" value={closingTrainee} onChange={e => { setClosingTrainee(e.target.value); setReviewed(false); }}>{traineeOptions(false)}</select><button type="button" onClick={() => setReviewed(true)}>Revisar requisitos DEMO</button></Panel><Panel title={t.name}><div className="td-metrics"><article><span>Prácticas validadas</span><strong>{t.completed} / {t.total}</strong><progress max={t.total} value={t.completed} aria-label="Prácticas DEMO validadas" /></article><article><span>Quiz registrado</span><strong>{t.quiz === null ? 'Pendiente' : `${t.quiz}%`}</strong></article><article><span>Revisión DEMO</span><strong>{reviewed ? ready ? 'Completo' : 'Pendiente' : 'Sin revisar'}</strong></article></div></Panel>{reviewed && <Panel title={ready ? 'Requisitos completos en el ejemplo' : 'Qué falta para continuar'}><ul><li>{practicesReady ? 'Todas las prácticas del ejemplo están validadas.' : `Faltan ${t.total - t.completed} prácticas por validar, con sus evidencias y evaluaciones.`}</li><li>{quizReady ? 'Quiz DEMO aprobado para la versión de ejemplo.' : 'Falta un quiz aprobado.'}</li>{t.status === 'paused' && <li>El entrenamiento está en pausa.</li>}</ul><div className="td-actions"><button type="button" onClick={() => go('evidence')}>Revisar prácticas y evidencias</button><button type="button" onClick={() => go('exams')}>Revisar quiz final</button></div>{admin && ready && <div className="td-review"><label>Conclusión administrativa<textarea /></label><Disabled>Confirmar cierre del entrenamiento</Disabled></div>}<p>Este ejemplo no verifica evidencias ni resultados reales y no puede cerrar un entrenamiento.</p></Panel>}</>;
+  } else view = <Panel title="Historial del entrenamiento"><p>Eventos sintéticos de ejemplo; no representan acciones de usuarios reales.</p><div className="td-table-scroll"><table><thead><tr><th>Emisor</th><th>Evento DEMO</th><th>Estado</th></tr></thead><tbody>{trainees.map(t => <tr key={t.id}><td>{t.name}</td><td>Inscripción en {t.program} · v{t.version}</td><td><Badge status={t.status} /></td></tr>)}{evidence.map(e => <tr key={e.id}><td>{name(e.traineeId)}</td><td>Revisión: {e.topic}</td><td><Badge status={e.status} /></td></tr>)}</tbody></table></div></Panel>;
+  return <div className="training-demo" data-training-mode={mode}>
+    <div className="td-notice"><strong>VISTA DEMO · Datos ficticios</strong><span>Navegación y filtros disponibles. Guardado, archivos reales y enlaces públicos deshabilitados.</span></div>
+    {readOnly && <p className="td-readonly">Solo lectura: consulta los entrenamientos de ejemplo asignados.</p>}
+    <nav className="td-tabs" aria-label="Secciones de entrenamiento">{TABS.map(item => <button type="button" key={item.id} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'td-active' : ''} onClick={() => go(item.id)}>{item.label}</button>)}</nav>
+    <h2 className="td-view-title" tabIndex={-1} ref={heading}>{TABS.find(item => item.id === tab)?.label}</h2>
+    <div className="td-stats">{[['Emisores de ejemplo', trainees.length], ['Sesiones programadas', sessions.filter(s => s.status !== 'completed').length], ['Evidencias pendientes', evidence.filter(e => e.status === 'pending').length], ['Prácticas validadas', trainees.reduce((n, t) => n + t.completed, 0)]].map(([label, count]) => <article key={label}><span>{label}</span><strong>{count}</strong></article>)}</div>
+    {view}
+    <dialog ref={dialog} onClose={() => setMaterial(null)} aria-labelledby="td-material-title"><div className="td-row-head"><h2 id="td-material-title">{material?.title}</h2><button type="button" onClick={() => setMaterial(null)}>Cerrar</button></div><pre>{material?.content}</pre></dialog>
+  </div>;
+}

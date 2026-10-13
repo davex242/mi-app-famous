@@ -13,11 +13,11 @@ Updated 2026-10-13. Scope: `base44/setup-b8f0f68b`; keep the current database an
 - Local persistence, restart, backup, copy restore and explicit supported copy upgrade.
 - Responsive overview, agenda, evidence filters and the progress/closing screen.
 
-These are functional with synthetic data in the separate local training runtime. The existing React application still has its earlier training skeleton; production integration is pending.
+These are functional with synthetic data in the separate local training runtime. The React application now has all nine native DEMO views in its existing training route. Navigation, filters, synthetic material previews/downloads and example closing checklists work. Operational writes, real uploads, quiz invitations and closing are disabled; the functional local training API is not yet connected to these React views.
 
 ## Pending, in recommended order
 
-1. **Integrate the reviewed screens into the React application on the isolated branch.** Start in explicit DEMO mode, preserving the current login, navigation and existing app functions. The standalone local training screen is not yet the complete module inside Host Manager.
+1. **Connect the native React views to the isolated training API for synthetic end-to-end tests.** The native DEMO integration is complete. Adapt the public workspace DTOs, verified local sessions and service errors without routing writes to production or exposing quiz answer keys. The standalone local runtime remains the operational reference.
 2. **Review the remaining interface flows with the user.** Programs, material library, quiz authoring/invitations and recruiter/read-only views need final visual acceptance inside the application.
 3. **Prepare actual training content.** Replace DEMO topics, materials, program items and question banks with reviewed agency content; define each exam's passing threshold and invitation limits explicitly.
 4. **Verify recruiter identity and assignments.** MICO profile support is prepared in the branch. Its nullable column remains unapplied. Verify real MICO IDs, host assignments and a server-verifiable identity link; never substitute internal user IDs or infer IDs from matching names.
@@ -26,4 +26,4 @@ These are functional with synthetic data in the separate local training runtime.
 7. **Validate the real integration in a separate test environment.** Exercise multiple concurrent users, current assignment changes, permission revocation, failure recovery, file access and end-to-end completion against the chosen backend. Local browser/PGlite tests do not establish hosted concurrency or deployment readiness.
 8. **Review the release and rollback before merging.** Confirm the intended change set, preview deployment, gradual enablement and backups. A Vercel code rollback does not undo records written or database changes.
 
-Next development step within the current code/interface-only scope: item 1, followed by item 2. Items 4–8 require later integration work and explicit authorization for any hosted configuration or schema changes.
+Next development step within the current isolated scope: item 2 for visual review, then item 1 for synthetic API integration. Items 4–8 require later integration work and explicit authorization for any hosted configuration or schema changes.
