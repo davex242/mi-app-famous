@@ -230,11 +230,12 @@ function history() {
 async function action(path, body, message, afterSuccess) {
   if (state.busy) return;
   state.busy = true;
-  $('#content').querySelectorAll('button').forEach(button => { button.disabled = true; });
+  $('#notice').hidden=true;$('#content').setAttribute('aria-busy','true');
+  $('#content').querySelectorAll('button,input,select,textarea').forEach(control => { control.disabled = true; });
   try {
     const result = await api(path, body); afterSuccess?.(result); await refresh(); notify((typeof message === 'function' ? message(result) : message) + (persistent?' Datos guardados en esta prueba local.':' Datos guardados únicamente en este entorno temporal.'));
   } catch (error) { if (state.token) { render(); notify(error.message, true); } else $('#login-error').textContent = error.message; }
-  finally { state.busy = false; }
+  finally { state.busy = false;$('#content').setAttribute('aria-busy','false'); }
 }
 $('#login-form').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.currentTarget, button = form.querySelector('button'); button.disabled = true; $('#login-error').textContent = '';
