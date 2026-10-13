@@ -6,6 +6,7 @@ import { createUpdateOperations, effectiveItemId, updateHistory, currentProgress
 import { createExamOperations } from './exams.mjs';
 import {createClosingOperations,scopedClosingRecords,scopedExamIssuances} from './closing.mjs';
 import {createClosingExportOperations} from './closing-export.mjs';
+import {validateMP4} from './private-videos.mjs';
 import {validatePDF} from './private-pdfs.mjs';
 import {normalizePNG} from './private-images.mjs';
 import {createEvidenceFileOperations,loadEvidenceFile,evidencePath,evidenceMetadata} from './evidence-files.mjs';
@@ -165,15 +166,15 @@ export function createTrainingService(db) {
       return rows[0];
     }),
     submitEvidence: (token, body) => run(token, async (tx, actor) => {
-      requireWrite(actor); fields(body, ['session_id', 'description','image_base64','pdf_base64','consent_confirmed']);
+      requireWrite(actor); fields(body, ['session_id', 'description','image_base64','pdf_base64','video_base64','consent_confirmed']);
       const s = await session(tx, actor, body.session_id),description=text(body.description);
-      const png=Object.hasOwn(body,'image_base64'),pdf=Object.hasOwn(body,'pdf_base64'),attached=png||pdf;
-      if(png&&pdf)fail(400,'Choose one evidence file');
+      const png=Object.hasOwn(body,'image_base64'),pdf=Object.hasOwn(body,'pdf_base64'),video=Object.hasOwn(body,'video_base64'),attached=png||pdf||video;
+      if(Number(png)+Number(pdf)+Number(video)>1)fail(400,'Choose one evidence file');
       if(attached&&body.consent_confirmed!==true)fail(400,'Evidence file consent required');
       if(!attached&&Object.hasOwn(body,'consent_confirmed'))fail(400,'Invalid fields');
-      const file=pdf?await validatePDF(body.pdf_base64,fail):png?normalizePNG(body.image_base64,fail):null,id=randomUUID();
+      const file=pdf?await validatePDF(body.pdf_base64,fail):video?validateMP4(body.video_base64,fail):png?normalizePNG(body.image_base64,fail):null,id=randomUUID();
       const { rows } = await tx.query(`insert into public.training_evidence(id,enrollment_id,session_id,topic_id,description,submitted_by,storage_path)
-        values($1,$2,$3,$4,$5,$6,$7) returning *`, [id,s.enrollment_id, s.id, s.topic_id,description, actor.app_user_id,file?evidencePath(id,pdf?'pdf':'image'):null]);
+        values($1,$2,$3,$4,$5,$6,$7) returning *`, [id,s.enrollment_id, s.id, s.topic_id,description, actor.app_user_id,file?evidencePath(id,pdf?'pdf':video?'video':'image'):null]);
       if(file)await tx.query('insert into training_private.local_evidence_content(evidence_id,body) values($1,$2)',[id,JSON.stringify(file)]);
       await tx.query('insert into public.training_approvals(evidence_id,requested_by) values($1,$2)', [id, actor.app_user_id]);
       await audit(tx, actor, 'evidence_submitted', 'evidence', id, s.enrollment_id,file?{attachment:evidenceMetadata(file),consent_confirmed:true}:{});

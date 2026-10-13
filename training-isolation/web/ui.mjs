@@ -11,7 +11,7 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
-  'Choose one evidence file':'Adjunta una imagen o un PDF por evidencia.',
+  'Choose one evidence file':'Adjunta una imagen, un PDF o un clip MP4 por evidencia.',
   'Evidence PDF preview unavailable':'Los PDF de evidencia se descargan sin visor integrado.',
   'Evidence file consent required':'Confirma que tienes autorización para adjuntar esta evidencia y el consentimiento de terceros, si aparecen.',
   'Private evidence content unavailable':'No se pudo verificar el archivo de evidencia. No se aprobó ni validó la práctica.',
@@ -102,7 +102,12 @@ function clearMaterialVideo(){
   const video=$('#preview-video');if(video){video.onerror=null;video.pause();video.removeAttribute('src');video.load();}
   if(materialVideoURL){URL.revokeObjectURL(materialVideoURL);materialVideoURL=null;}
 }
-function clearEvidenceImage(){ $('#evidence-preview-image')?.removeAttribute('src'); }
+let evidenceVideoURL=null;
+function clearEvidenceImage(){
+  $('#evidence-preview-image')?.removeAttribute('src');
+  const video=$('#evidence-preview-video');if(video){video.onerror=null;video.pause();video.removeAttribute('src');video.load();}
+  if(evidenceVideoURL){URL.revokeObjectURL(evidenceVideoURL);evidenceVideoURL=null;}
+}
 function exitSession() {
   clearEvidenceImage();
   clearMaterialVideo();
@@ -181,15 +186,15 @@ function itemOptions(enrollmentId) {
 function evidence() {
   const w = state.workspace;
   const sessions = w.sessions.filter(s => w.enrollments.some(e => e.id === s.enrollment_id && e.status === 'active'));
-  const submit = canWrite() ? `<section class="panel"><h2>Envía una práctica</h2><p>Describe lo que realizó el emisor y, si lo necesitas, adjunta una imagen o un PDF privado. Solo el personal con acceso actual a este emisor puede verla o descargarla.</p><form id="evidence-form"><label>Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Descripción de la práctica<textarea name="description" maxlength="2000" required placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…"></textarea></label><label>Tipo de archivo opcional<select name="evidence_kind"><option value="image">Imagen PNG o JPEG</option><option value="pdf">Documento PDF</option></select></label><label><span id="evidence-file-label">Imagen de evidencia (opcional)</span><input name="evidence_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"><small id="evidence-image-help">Máximo 2 MiB y 2048 píxeles por lado, hasta 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce proporcionalmente hasta 768 píxeles por lado. Se eliminan los metadatos y el nombre original; la descarga será PNG.</small><small id="evidence-pdf-help" hidden>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Se descarga para revisión; no hay visor integrado.</small></label><label class="check-label" id="evidence-consent-field" hidden><input name="consent_confirmed" type="checkbox"> Confirmo que tengo autorización para usar este archivo y el consentimiento de terceros, si aparecen.</label><button class="primary" type="submit" ${!sessions.length ? 'disabled' : ''}>Enviar a revisión →</button></form></section>` : '';
+  const submit = canWrite() ? `<section class="panel"><h2>Envía una práctica</h2><p>Describe lo que realizó el emisor y, si lo necesitas, adjunta una imagen, un PDF o un clip MP4 privado. Solo el personal con acceso actual a este emisor puede verla o descargarla.</p><form id="evidence-form"><label>Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Descripción de la práctica<textarea name="description" maxlength="2000" required placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…"></textarea></label><label>Tipo de archivo opcional<select name="evidence_kind"><option value="image">Imagen PNG o JPEG</option><option value="pdf">Documento PDF</option><option value="video">Clip MP4</option></select></label><label><span id="evidence-file-label">Imagen de evidencia (opcional)</span><input name="evidence_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"><small id="evidence-image-help">Máximo 2 MiB y 2048 píxeles por lado, hasta 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce proporcionalmente hasta 768 píxeles por lado. Se eliminan los metadatos y el nombre original; la descarga será PNG.</small><small id="evidence-pdf-help" hidden>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Se descarga para revisión; no hay visor integrado.</small><small id="evidence-video-help" hidden>Máximo 2 MiB y 60 segundos. MP4 progresivo H.264 con audio AAC opcional; hasta 1280 píxeles por lado y 921600 píxeles en total. Se conserva el archivo original y sus metadatos. La reproducción comienza solo al pulsar Reproducir.</small></label><label class="check-label" id="evidence-consent-field" hidden><input name="consent_confirmed" type="checkbox"> Confirmo que tengo autorización para usar este archivo y el consentimiento de terceros, si aparecen.</label><button class="primary" type="submit" ${!sessions.length ? 'disabled' : ''}>Enviar a revisión →</button></form></section>` : '';
   const cards = w.evidence.slice().sort((a, b) => b.submitted_at.localeCompare(a.submitted_at)).map(e => {
     const review = isAdmin() && e.status === 'pending' && w.enrollments.some(n=>n.id===e.enrollment_id&&n.status==='active') ? `<form class="review-form" data-review="${esc(e.id)}"><label>Decisión<select name="decision"><option value="approved">Aprobar práctica</option><option value="rejected">Rechazar y solicitar corrección</option></select></label><label>Notas de revisión<textarea name="notes" maxlength="2000" required></textarea></label><button class="primary" type="submit">Registrar revisión</button></form>` : '';
     const enrollment=w.enrollments.find(n=>n.id===e.enrollment_id);
     const approval = w.approvals.find(a => a.evidence_id === e.id);
-    return `<article class="evidence-card">${pill(e.status)}<small>${esc(enrollment?enrollLabel(enrollment):'Emisor DEMO')}</small><h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${e.storage_path?`<p>${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'Documento privado · PDF · Solo descarga':'Imagen privada · PNG'}</p><div class="actions"><button class="secondary" data-preview-evidence="${esc(e.id)}" ${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'disabled':''}>Ver evidencia</button><button class="secondary" data-download-evidence="${esc(e.id)}">Descargar evidencia</button></div>`:''}${review}</article>`;
+    return `<article class="evidence-card">${pill(e.status)}<small>${esc(enrollment?enrollLabel(enrollment):'Emisor DEMO')}</small><h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${e.storage_path?`<p>${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'Documento privado · PDF · Solo descarga':e.storage_path===`sandbox/evidence/${e.id}.mp4`?'Video privado · MP4':'Imagen privada · PNG'}</p><div class="actions"><button class="secondary" data-preview-evidence="${esc(e.id)}" ${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'disabled':''}>Ver evidencia</button><button class="secondary" data-download-evidence="${esc(e.id)}">Descargar evidencia</button></div>`:''}${review}</article>`;
   }).join('');
   const assess = isAdmin() ? `<section class="panel"><h2>Evaluación y validación administrativa</h2><p>La validación exige evidencia aprobada y evaluación satisfactoria. Conservamos cada revisión.</p><form id="assessment-form" class="form-grid"><label class="wide">Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Puntuación<input name="score" type="number" min="0" max="100" step="0.01" value="90" required></label><label>Resultado<select name="passed"><option value="true">Satisfactorio</option><option value="false">Requiere mejora</option></select></label><label class="wide">Notas<textarea name="notes" maxlength="2000" required></textarea></label><div class="wide actions"><button class="secondary" type="submit" ${!sessions.length ? 'disabled' : ''}>Guardar evaluación</button><button id="complete-button" class="primary" type="button" ${!sessions.length ? 'disabled' : ''}>Validar práctica ✓</button></div></form></section>` : '';
-  return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}<dialog id="evidence-preview"><div class="panel-head"><h2>Imagen de evidencia</h2><button class="secondary" data-close-evidence>Cerrar</button></div><img id="evidence-preview-image" alt="Evidencia de la práctica"></dialog>`;
+  return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}<dialog id="evidence-preview"><div class="panel-head"><h2>Evidencia de la práctica</h2><button class="secondary" data-close-evidence>Cerrar</button></div><img id="evidence-preview-image" alt="Evidencia de la práctica"><video id="evidence-preview-video" controls playsinline preload="metadata" controlslist="nodownload noremoteplayback" disablepictureinpicture hidden></video><p id="evidence-video-error" class="error" role="alert" hidden>Este navegador no puede reproducir el clip. Puedes descargarlo y abrirlo con un reproductor compatible.</p></dialog>`;
 }
 function library() {
   const w = state.workspace, materials = state.catalogueMode === 'materials';
@@ -248,8 +253,8 @@ $('#content').addEventListener('close',event=>{if(event.target.id==='evidence-pr
 $('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
   if(event.target.matches('#evidence-form [name="evidence_kind"]')){
-    const pdf=event.target.value==='pdf',file=$('#evidence-form [name="evidence_file"]');file.value='';file.accept=pdf?'application/pdf,.pdf':'image/png,image/jpeg,.png,.jpg,.jpeg';
-    $('#evidence-file-label').textContent=pdf?'PDF de evidencia (opcional)':'Imagen de evidencia (opcional)';$('#evidence-image-help').hidden=pdf;$('#evidence-pdf-help').hidden=!pdf;
+    const pdf=event.target.value==='pdf',video=event.target.value==='video',file=$('#evidence-form [name="evidence_file"]');file.value='';file.accept=pdf?'application/pdf,.pdf':video?'video/mp4,.mp4':'image/png,image/jpeg,.png,.jpg,.jpeg';
+    $('#evidence-file-label').textContent=pdf?'PDF de evidencia (opcional)':video?'Video de evidencia (opcional)':'Imagen de evidencia (opcional)';$('#evidence-image-help').hidden=pdf||video;$('#evidence-pdf-help').hidden=!pdf;$('#evidence-video-help').hidden=!video;
     const consent=$('#evidence-form [name="consent_confirmed"]');consent.checked=false;consent.required=false;$('#evidence-consent-field').hidden=true;
   }
   if(event.target.matches('#evidence-form [name="evidence_file"]')){const attached=!!event.target.files[0];$('#evidence-consent-field').hidden=!attached;const consent=$('#evidence-form [name="consent_confirmed"]');consent.checked=false;consent.required=attached;}
@@ -292,12 +297,12 @@ $('#content').addEventListener('submit', async event => {
     if(!form.elements.consent_confirmed.checked)return notify(errors['Evidence file consent required'],true);
     state.busy=true;const token=state.token,button=form.querySelector('button[type="submit"]');button.disabled=true;
     try{
-      const pdf=form.elements.evidence_kind.value==='pdf';let prepared;
-      if(pdf){if(!file.size||file.size>2*1024*1024)throw Error(errors['PDF exceeds 2 MiB limit']);const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));prepared={base64:btoa(binary)};}
+      const pdf=form.elements.evidence_kind.value==='pdf',video=form.elements.evidence_kind.value==='video';let prepared;
+      if(pdf||video){if(!file.size||file.size>2*1024*1024)throw Error(errors[video?'Video exceeds 2 MiB limit':'PDF exceeds 2 MiB limit']);const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));prepared={base64:btoa(binary)};}
       else prepared=await preparePrivateImage(file);
       if(state.token!==token||!form.isConnected)return;
       state.busy=false;
-      await action('/api/evidence',{...body,...(pdf?{pdf_base64:prepared.base64}:{image_base64:prepared.base64}),consent_confirmed:true},(pdf?'Práctica y PDF enviados para revisión.':'Práctica e imagen enviadas para revisión.')+(prepared.converted?` JPEG convertido a PNG de ${prepared.width} × ${prepared.height} píxeles${prepared.resized?' con reducción proporcional':''}.`:''));
+      await action('/api/evidence',{...body,...(pdf?{pdf_base64:prepared.base64}:video?{video_base64:prepared.base64}:{image_base64:prepared.base64}),consent_confirmed:true},(pdf?'Práctica y PDF enviados para revisión.':video?'Práctica y video enviados para revisión.':'Práctica e imagen enviadas para revisión.')+(prepared.converted?` JPEG convertido a PNG de ${prepared.width} × ${prepared.height} píxeles${prepared.resized?' con reducción proporcional':''}.`:''));
     }catch(error){if(state.token===token)notify(error.message,true);}
     finally{state.busy=false;if(button.isConnected)button.disabled=false;}
     return;
@@ -353,9 +358,14 @@ $('#content').addEventListener('click', async event => {
       const result=await api(download?'/api/evidence/file-download':'/api/evidence/file-preview',{evidence_id});
       if(state.token!==token||!button.isConnected)return;
       if(download){
-        const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(result.pdf_base64||result.image_base64),c=>c.charCodeAt(0))],{type:result.mime}));
-        const anchor=document.createElement('a');anchor.href=url;anchor.download=result.filename;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify(result.pdf_base64?'Descarga de la evidencia PDF iniciada.':'Descarga de la evidencia PNG iniciada.');
-      }else{clearEvidenceImage();$('#evidence-preview-image').src='data:image/png;base64,'+result.image.data;$('#evidence-preview').showModal();}
+        const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(result.video_base64||result.pdf_base64||result.image_base64),c=>c.charCodeAt(0))],{type:result.mime}));
+        const anchor=document.createElement('a');anchor.href=url;anchor.download=result.filename;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify(result.video_base64?'Descarga de la evidencia MP4 iniciada.':result.pdf_base64?'Descarga de la evidencia PDF iniciada.':'Descarga de la evidencia PNG iniciada.');
+      }else{
+        clearEvidenceImage();const video=result.type==='video';$('#evidence-preview-image').hidden=video;$('#evidence-preview-video').hidden=!video;$('#evidence-video-error').hidden=true;
+        if(video){evidenceVideoURL=URL.createObjectURL(new Blob([Uint8Array.from(atob(result.video.data),c=>c.charCodeAt(0))],{type:'video/mp4'}));$('#evidence-preview-video').onerror=()=>{const node=$('#evidence-video-error');if(node)node.hidden=false;};$('#evidence-preview-video').src=evidenceVideoURL;}
+        else $('#evidence-preview-image').src='data:image/png;base64,'+result.image.data;
+        $('#evidence-preview').showModal();
+      }
     }catch(error){if(state.token===token)notify(error.message,true);}
     finally{state.busy=false;}
     return;
