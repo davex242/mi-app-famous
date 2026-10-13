@@ -5,6 +5,7 @@ import { createProgramOperations, ensureNoSessionOverlap } from './programs.mjs'
 import { createUpdateOperations, effectiveItemId, updateHistory, currentProgress, propagateCompletion } from './updates.mjs';
 import { createExamOperations } from './exams.mjs';
 import {createClosingOperations,scopedClosingRecords,scopedExamIssuances} from './closing.mjs';
+import {createClosingExportOperations} from './closing-export.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -72,6 +73,7 @@ export function createTrainingService(db) {
     ...createUpdateOperations(run,{fields,uuid,fail,requireWrite,enrollment,audit}),
     ...createExamOperations(db,run,{fields,text,uuid,fail,requireAdmin,requireWrite,enrollment,audit}),
     ...createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,enrollment,audit}),
+    ...createClosingExportOperations(run,{fields,uuid,fail,enrollment,audit}),
     async login(body) {
       fields(body, ['username', 'password']);
       const username = text(body.username, 80);

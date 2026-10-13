@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.5
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir cierre administrativo: **303 pruebas de SQL/API y 44 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir exportación del cierre: **312 pruebas de SQL/API y 46 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -197,6 +197,22 @@ El registro no puede editarse mediante la API. Completar bloquea nuevas mutacion
 | /api/training/complete | enrollment_id, attempt_id, expected_program_version_id, preview_hash, notes | Administrador; confirmación explícita |
 
 Las pruebas cubren prácticas incompletas, evaluación posterior reprobada, puntuación falsificada, respuestas privadas faltantes, quiz de otra inscripción/versión, propuesta obsoleta, pausa, concurrencia e idempotencia, alcance tras reasignación, conservación histórica, reinicio local y revisión en escritorio/móvil. PGlite serializa las operaciones; estas pruebas no demuestran concurrencia distribuida con múltiples conexiones.
+
+## Exportación del cierre
+
+Cada registro de cierre ofrece **Descargar informe** (HTML independiente e imprimible) y **Descargar registro JSON**. El informe puede guardarse como PDF mediante la impresión del navegador; el servidor no genera un PDF. La descarga exige una sesión activa y vuelve a comprobar la asignación actual del emisor. Superadmin/subadmin y el personal asignado, incluido readonly, pueden descargar; reasignar el emisor, desactivar la cuenta o revocar la sesión bloquea solicitudes posteriores.
+
+Los datos provienen exclusivamente del snapshot conservado al cerrar: ID de emisor/inscripción, versión y título del programa, actor/fecha de cierre, validaciones y referencias de prácticas, resultado/umbral del quiz y conclusión. Las prácticas se identifican por día y IDs históricos; el cierre previo no guardaba los nombres de temas o del emisor, así que no se inventan ni se incorporan perfiles actuales. Publicar nuevas revisiones no cambia el informe. Se verificó que ambos formatos conservan exactamente el mismo contenido y checksum tras reiniciar el almacén local.
+
+No se exportan respuestas/claves privadas, invitaciones, sesiones del personal, request_hash ni preview_hash. El HTML escapa los textos, tiene estilos locales y política CSP restrictiva, sin scripts, imágenes, enlaces ni peticiones externas. Admite móvil e impresión; textos largos se ajustan sin desbordar. El JSON usa una proyección de campos explícita, versionada como host-training-closing-report v1, sin metadatos arbitrarios de eventos.
+
+Cada solicitud exitosa añade training_closing_exported con el actor solicitante real, registro de cierre, formato y SHA-256 de los bytes UTF-8 generados. No modifica el cierre, no lo duplica y no cambia su fecha. El checksum permite comparar copias con el resultado original de la API; no constituye una firma digital. Los archivos descargados son copias editables del informe administrativo DEMO, sin acreditación oficial ni verificación pública. La app no puede retirar una copia ya descargada después de revocar el acceso.
+
+| Ruta POST | Cuerpo | Permiso |
+|---|---|---|
+| /api/training/closing-export | record_id, format: html o json | Personal autenticado con alcance actual del emisor |
+
+Pruebas: aislamiento, campos/formatos falsos, eventos ajenos rechazados, revocación inmediata, ausencia de secretos, escape de contenido activo, auditoría del solicitante, bytes históricos estables, persistencia y descarga real en navegador. La [captura del informe imprimible](preview/training-closing-report.png) incluye texto adversarial de QA para comprobar que se muestra como texto y se ajusta al ancho; todos los datos son sintéticos.
 
 ## Persistencia local independiente (opcional)
 

@@ -54,6 +54,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
       if (req.method === 'GET' && path === '/api/workspace') return send(200, await service.workspace(token));
       const routes = {
         '/api/training/closing-preview':'previewClosing', '/api/training/complete':'completeTraining',
+        '/api/training/closing-export':'exportClosing',
         '/api/exams/template':'examTemplate', '/api/exams/publish':'publishExam', '/api/exams/issue':'issueExam', '/api/exams/revoke':'revokeExam',
         '/api/quiz/status':'examStatus', '/api/quiz/start':'startExam', '/api/quiz/submit':'submitExam',
         '/api/login': 'login', '/api/logout': 'logout', '/api/enrollments': 'enroll',

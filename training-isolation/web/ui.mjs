@@ -10,6 +10,8 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Choose HTML or JSON report':'Selecciona informe HTML o registro JSON.',
+  'Closing record is inconsistent':'Este registro necesita revisión administrativa antes de exportarse.',
   'Closing requirements changed; review again':'Los requisitos cambiaron. Revisa el cierre otra vez antes de confirmar.',
   'Training requirements are incomplete':'Todavía hay requisitos pendientes; no se cerró el entrenamiento.',
   'Training is already closed; its record cannot change':'Este entrenamiento ya fue cerrado y su registro se conserva sin cambios.',
@@ -188,7 +190,7 @@ function library() {
 function history() {
   const w = state.workspace;
   const rows = w.approvals.filter(a => a.reviewed_at).map(a => `<tr><td>${a.topic_id ? 'Publicación de tema' : a.material_id ? 'Publicación de material' : a.program_version_id ? 'Publicación de programa' : 'Revisión de evidencia'}<small>${esc(a.review_notes)}</small></td><td>${pill(a.status)}</td><td>${esc(date(a.reviewed_at))}</td></tr>`).join('') + w.assessments.map(a => `<tr><td>Evaluación práctica<small>${esc(a.notes)}</small></td><td>${a.score}/100 · ${a.passed ? 'Satisfactoria' : 'Requiere mejora'}</td><td>${esc(date(a.assessed_at))}</td></tr>`).join('') + w.attendance.map(a=>`<tr><td>Asistencia de sesión</td><td>${esc({present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'}[a.status])}</td><td>${esc(date(a.recorded_at))}</td></tr>`).join('') + w.events.filter(e=>e.event_type==='session_rescheduled').map(e=>`<tr><td>Reprogramación de sesión<small>${esc(e.details.reason)}</small></td><td>${esc(date(e.details.previous_scheduled_at))} → ${esc(date(e.details.scheduled_at))}</td><td>${esc(date(e.created_at))}</td></tr>`).join('');
-  return `<section class="panel"><h2>Historial de entrenamiento</h2><p>Cada revisión conserva su resultado y sus notas.</p>${rows ? `<div class="table-scroll"><table><thead><tr><th>Acción</th><th>Resultado</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu historial comienza aquí', 'Aparecerá cuando se revisen evidencias o se registren evaluaciones.')}</section><div class="future"><h3>Quiz final · 50 preguntas</h3><p>Función futura. Validar una práctica todavía no completa el programa ni genera una certificación.</p></div>`;
+  return `<section class="panel"><h2>Historial de entrenamiento</h2><p>Cada revisión conserva su resultado y sus notas.</p>${rows ? `<div class="table-scroll"><table><thead><tr><th>Acción</th><th>Resultado</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu historial comienza aquí', 'Aparecerá cuando se revisen evidencias o se registren evaluaciones.')}</section><div class="future"><h3>Quiz final · 50 preguntas</h3><p>El quiz y las prácticas se verifican en Cierre. Solo un administrador puede confirmar la finalización del entrenamiento.</p></div>`;
 }
 async function action(path, body, message, afterSuccess) {
   if (state.busy) return;
@@ -257,6 +259,7 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (await closingUI.handleClick(button)) return;
   if (await examsUI.handleClick(button)) return;
   if (await updatesUI.handleClick(button)) return;
   if (await programUI.handleClick(button)) return;

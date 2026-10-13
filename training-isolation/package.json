@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --expose-gc --test --test-concurrency=1 isolation.test.mjs api.test.mjs catalogue.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs closing.test.mjs && node --expose-gc --test persistence.test.mjs closing-persistence.test.mjs",
+    "test": "node --expose-gc --test --test-concurrency=1 isolation.test.mjs api.test.mjs catalogue.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs closing.test.mjs closing-export.test.mjs && node --expose-gc --test persistence.test.mjs closing-persistence.test.mjs",
     "test:ui": "node --test --test-concurrency=1 ui.test.mjs exams-ui.test.mjs persistence-ui.test.mjs closing-ui.test.mjs",
     "start": "node server.mjs",
     "start:persistent": "node local-runtime.mjs start",
