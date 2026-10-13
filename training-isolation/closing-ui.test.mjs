@@ -24,12 +24,30 @@ test('closing UI: checklist, administrative confirmation and readonly mobile rec
    recruiter=await login('edit');await recruiter.locator('#closing-preview-form button').click();await recruiter.locator('#closing-checklist').waitFor();
    assert.match(await recruiter.locator('#closing-checklist').textContent(),/Requisitos pendientes/);assert.equal(await recruiter.locator('#closing-confirm-form').count(),0);
    assert.equal((await db.query('select status from public.training_enrollments')).rows[0].status,'active');
+   assert.match(await recruiter.locator('.closing-progress').textContent(),/1 \/ 2/);
+   assert.equal(await recruiter.locator('.closing-next').count(),1);
+   if(process.env.UI_SCREENSHOT_DIR){await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});await recruiter.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-closing-pending.png',fullPage:true});}
+   await recruiter.locator('[data-closing-open="evidence"]').click();
+   assert.equal(await recruiter.locator('#evidence-status-filter').count(),1);
+   await recruiter.locator('[data-tab="closing"]').click();
   });
   await t.test('administrator reviews complete requirements and must provide a conclusion',async()=>{
    await service.completeItem(tokens.superadmin,{session_id:scenario.sessions[1].id});admin=await login('superadmin');await admin.locator('#closing-preview-form button').click();await admin.locator('#closing-confirm-form').waitFor();
    assert.match(await admin.locator('#closing-checklist').textContent(),/Listo para revisión administrativa/);
+   assert.match(await admin.locator('.closing-check-summary').textContent(),/2 \/ 2 prácticas verificadas/);
+   assert.match(await admin.locator('.closing-progress').textContent(),/100%/);
+   await admin.locator('#refresh-button').click();
+   await admin.locator('#notice').filter({hasText:'Información actualizada'}).waitFor();
+   assert.equal(await admin.locator('#closing-confirm-form').count(),0);
+   assert.match(await admin.locator('.closing-progress').textContent(),/Sin revisar/);
+   await admin.locator('#closing-preview-form button').click();
+   await admin.locator('#closing-confirm-form').waitFor();
    await admin.locator('#closing-confirm-form button').click();assert.equal((await db.query('select status from public.training_enrollments')).rows[0].status,'active');
-   if(process.env.UI_SCREENSHOT_DIR){await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});await admin.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-closing-review.png',fullPage:true});}
+   await admin.setViewportSize({width:390,height:844});
+   assert.ok(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   if(process.env.UI_SCREENSHOT_DIR){await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});await admin.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-closing-review-mobile.png',fullPage:true});}
+   await admin.setViewportSize({width:1440,height:1050});
+   if(process.env.UI_SCREENSHOT_DIR)await admin.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-closing-review.png',fullPage:true});
   });
   await t.test('confirmation closes through the server and records a safely rendered immutable result',async()=>{
    await admin.locator('#closing-confirm-form [name="notes"]').fill(notes);await admin.locator('#closing-confirm-form button').click();await admin.locator('#notice').filter({hasText:'Entrenamiento cerrado; historial conservado.'}).waitFor();
