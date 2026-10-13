@@ -27,6 +27,8 @@ export interface Host {
 
 export interface AppUser {
   id: string;
+  /** MICO account identifier; distinct from the internal app user ID. */
+  mico_id?: string | null;
   email: string;
   name: string;
   role: 'superadmin' | 'subadmin' | 'edit' | 'readonly';
@@ -79,3 +81,4 @@ export interface CountryCode {
 
 // Host Training & Development (Stage 1 — type contracts only)
 export * from './training';
+

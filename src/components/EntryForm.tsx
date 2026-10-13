@@ -131,15 +131,22 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
       setFormData(data);
       setOriginalData(data);
     } else if (isNewEntry) {
-      // Pre-fill reclutador and rec_id with current user's info for new entries
+      // Pre-fill the recruiter name; MICO ID remains a manual entry.
       setFormData(prev => ({
         ...prev,
         reclutador: defaultRecruiter || user?.name || '',
-        rec_id: user?.id || '',
       }));
     }
 
   }, [entry, isNewEntry, user]);
+
+  useEffect(() => {
+    if (entry || !isNewEntry) return;
+    const recruiterName = defaultRecruiter || user?.name || '';
+    const matches = availableUsers.filter(candidate => defaultRecruiter ? candidate.name === recruiterName : candidate.id === user?.id);
+    const micoId = matches.length === 1 ? matches[0].mico_id || '' : (!defaultRecruiter || defaultRecruiter === user?.name ? user?.mico_id || '' : '');
+    setFormData(prev => ({ ...prev, rec_id: prev.reclutador === recruiterName ? prev.rec_id || micoId : micoId }));
+  }, [entry, isNewEntry, defaultRecruiter, user, availableUsers]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -259,11 +266,11 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
   // Handle recruiter selection
   const handleRecruiterChange = (recruiterName: string) => {
-    const selectedUser = availableUsers.find(u => u.name === recruiterName);
+    const matches = availableUsers.filter(candidate => candidate.name === recruiterName);
     setFormData(prev => ({
       ...prev,
       reclutador: recruiterName,
-      rec_id: selectedUser?.id || '',
+      rec_id: matches.length === 1 ? matches[0].mico_id || '' : '',
     }));
     if (errors.reclutador) {
       setErrors(prev => ({ ...prev, reclutador: '' }));
@@ -500,15 +507,15 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID del Reclutador <span className="text-red-500">*</span>
+              MICO ID del Reclutador <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={formData.rec_id}
               onChange={(e) => handleChange('rec_id', e.target.value)}
               className={inputClass('rec_id')}
-              disabled={isFormDisabled || (isNewEntry && !canManageUsers)}
-              placeholder="Ingresa tu ID de reclutador"
+              disabled={isFormDisabled}
+              placeholder="Ingresa el MICO ID del reclutador"
             />
             {errors.rec_id && <p className="mt-1 text-sm text-red-500">{errors.rec_id}</p>}
           </div>
@@ -643,3 +650,4 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
     </form>
   );
 }
+

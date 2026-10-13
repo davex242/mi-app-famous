@@ -35,7 +35,7 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AppUser | null>(null);
   const [roleChangeConfirm, setRoleChangeConfirm] = useState<{user: AppUser, newRole: UserRole} | null>(null);
-  const [formData, setFormData] = useState({ email: '', password: '', name: '', role: 'readonly' as UserRole });
+  const [formData, setFormData] = useState({ email: '', password: '', name: '', mico_id: '', role: 'readonly' as UserRole });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [changingRole, setChangingRole] = useState<string | null>(null);
@@ -53,6 +53,8 @@ export default function UserManagement() {
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
 
   const passwordStrength = checkPasswordStrength(manualPassword);
+  // Preserve legacy profile writes until the additive MICO column is available.
+  const micoIdSupported = users.some(user => Object.prototype.hasOwnProperty.call(user, 'mico_id'));
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -68,7 +70,7 @@ export default function UserManagement() {
 
   const resetForm = () => { setFormData({ email: '', password: '', name: '', role: 'readonly' }); setErrors({}); setEditingUser(null); };
   const openAddForm = () => { resetForm(); setShowForm(true); };
-  const openEditForm = (user: AppUser) => { setEditingUser(user); setFormData({ email: user.email, password: '', name: user.name, role: user.role }); setShowForm(true); };
+  const openEditForm = (user: AppUser) => { setEditingUser(user); setFormData({ email: user.email, password: '', name: user.name, mico_id: user.mico_id || '', role: user.role }); setShowForm(true); };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -76,6 +78,10 @@ export default function UserManagement() {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format';
     if (!editingUser && !formData.password.trim()) newErrors.password = 'Password is required';
     if (!formData.name.trim()) newErrors.name = 'Name is required';
+    if (micoIdSupported && formData.mico_id.trim()) {
+      if (!/^\d{1,32}$/.test(formData.mico_id.trim())) newErrors.mico_id = 'El MICO ID debe contener solo números (máximo 32 dígitos).';
+      else if (users.some(user => user.id !== editingUser?.id && user.mico_id === formData.mico_id.trim())) newErrors.mico_id = 'Este MICO ID ya pertenece a otro usuario.';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -85,18 +91,20 @@ export default function UserManagement() {
     if (!validate()) return;
     setSaving(true);
     try {
+      const micoData = micoIdSupported ? { mico_id: formData.mico_id.trim() || null } : {};
       if (editingUser) {
-        const updateData: any = { email: formData.email, name: formData.name, role: formData.role };
+        const updateData: any = { email: formData.email, name: formData.name, role: formData.role, ...micoData };
         if (formData.password) updateData.password_hash = formData.password;
         const { error } = await supabase.from('app_users').update(updateData).eq('id', editingUser.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('app_users').insert([{ email: formData.email, password_hash: formData.password, name: formData.name, role: formData.role }]);
+        const { error } = await supabase.from('app_users').insert([{ email: formData.email, password_hash: formData.password, name: formData.name, role: formData.role, ...micoData }]);
         if (error) throw error;
       }
       setShowForm(false); resetForm(); fetchUsers();
     } catch (error: any) {
-      if (error.code === '23505') setErrors({ email: 'Email already exists' });
+      if (error.code === '23505' && /app_users_mico_id_key/.test(error.message || '')) setErrors({ mico_id: 'Este MICO ID ya pertenece a otro usuario.' });
+      else if (error.code === '23505') setErrors({ email: 'Email already exists' });
       else alert('Failed to save user');
     } finally { setSaving(false); }
   };
@@ -479,6 +487,7 @@ export default function UserManagement() {
       <Modal isOpen={showForm} onClose={() => { setShowForm(false); resetForm(); }} title={editingUser ? 'Edit User' : 'Add New User'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Name</label><input type="text" value={formData.name} onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors.name ? 'border-red-500' : 'border-gray-300'}`} />{errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}</div>
+          {micoIdSupported && <div><label htmlFor="profile-mico-id" className="block text-sm font-medium text-gray-700 mb-1">MICO ID del usuario</label><input id="profile-mico-id" type="text" inputMode="numeric" maxLength={32} value={formData.mico_id} onChange={(e) => setFormData(prev => ({ ...prev, mico_id: e.target.value }))} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors.mico_id ? 'border-red-500' : 'border-gray-300'}`} placeholder="ID de su cuenta en MICO" /><p className="mt-1 text-xs text-gray-500">Opcional. Se usa como MICO ID del reclutador al agregar registros.</p>{errors.mico_id && <p className="mt-1 text-sm text-red-500">{errors.mico_id}</p>}</div>}
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />{errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}</div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Password {editingUser && <span className="text-gray-400">(leave blank to keep current)</span>}</label><input type="password" value={formData.password} onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))} className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors.password ? 'border-red-500' : 'border-gray-300'}`} />{errors.password && <p className="mt-1 text-sm text-red-500">{errors.password}</p>}</div>
           <div>
@@ -754,3 +763,4 @@ export default function UserManagement() {
     </div>
   );
 }
+
