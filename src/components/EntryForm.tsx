@@ -131,7 +131,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
       setFormData(data);
       setOriginalData(data);
     } else if (isNewEntry) {
-      // Pre-fill reclutador with defaultRecruiter or current user's name for new entries
+      // Pre-fill the recruiter name; MICO ID remains a manual entry.
       setFormData(prev => ({
         ...prev,
         reclutador: defaultRecruiter || user?.name || '',
@@ -148,16 +148,13 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
     if (!formData.host_id.trim()) newErrors.host_id = 'El ID del emisor es requerido';
     if (!formData.reg_date) newErrors.reg_date = 'La fecha de registro es requerida';
     if (!formData.phone_number.trim()) newErrors.phone_number = 'El número de WhatsApp es requerido';
-    if (!formData.user_id.trim()) newErrors.user_id = 'El ID de usuario es requerido';
-    if (!formData.pay_method) newErrors.pay_method = 'El método de pago es requerido';
     
     // Estado y Reclutador - Todos requeridos excepto ver_date
     if (!formData.estado) newErrors.estado = 'El estado es requerido';
     if (!formData.reclutador.trim()) newErrors.reclutador = 'El reclutador es requerido';
     if (!formData.rec_id.trim()) newErrors.rec_id = 'El ID del reclutador es requerido';
     
-    // Capturas - Todas requeridas
-    if (!formData.captura) newErrors.captura = 'La captura del método de pago es requerida';
+    // Capturas - Todas requeridas excepto la primera (método de pago)
     if (!formData.capture1) newErrors.capture1 = 'La captura del formulario de verificación es requerida';
     if (!formData.capture2) newErrors.capture2 = 'La captura de transmisión es requerida';
     if (!formData.capture3) newErrors.capture3 = 'La captura del chat de WhatsApp es requerida';
@@ -277,12 +274,9 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
       formData.host_id.trim() !== '' &&
       formData.reg_date !== '' &&
       formData.phone_number.trim() !== '' &&
-      formData.user_id.trim() !== '' &&
-      formData.pay_method !== '' &&
       formData.estado !== '' &&
       formData.reclutador.trim() !== '' &&
       formData.rec_id.trim() !== '' &&
-      formData.captura !== '' &&
       formData.capture1 !== '' &&
       formData.capture2 !== '' &&
       formData.capture3 !== ''
@@ -325,6 +319,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               value={formData.host_name}
               onChange={(e) => handleChange('host_name', e.target.value)}
               className={inputClass('host_name')}
+              placeholder="nombre emisor en mico"
               disabled={isFormDisabled}
             />
             {errors.host_name && <p className="mt-1 text-sm text-red-500">{errors.host_name}</p>}
@@ -339,6 +334,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               value={formData.host_id}
               onChange={(e) => handleChange('host_id', e.target.value)}
               className={inputClass('host_id')}
+              placeholder="mico ID"
               disabled={isFormDisabled}
             />
             {errors.host_id && <p className="mt-1 text-sm text-red-500">{errors.host_id}</p>}
@@ -355,19 +351,20 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               className={inputClass('reg_date')}
               disabled={isFormDisabled}
             />
+            <p className="mt-1 text-xs text-gray-400">form de verificacion</p>
             {errors.reg_date && <p className="mt-1 text-sm text-red-500">{errors.reg_date}</p>}
           </div>
 
           {/* Número de WhatsApp con Código de País */}
-          <div>
+          <div className="lg:col-span-3 md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Número de WhatsApp <span className="text-red-500">*</span>
             </label>
-            <div className="space-y-2">
+            <div className="flex gap-2">
               <select
                 value={formData.country_code}
                 onChange={(e) => handleChange('country_code', e.target.value)}
-                className={`w-full px-3 py-2.5 border rounded-lg transition-colors border-gray-300 focus:ring-blue-500 focus:ring-2 focus:border-transparent ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                className={`w-1/3 px-3 py-2.5 border rounded-lg transition-colors border-gray-300 focus:ring-blue-500 focus:ring-2 focus:border-transparent ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 disabled={isFormDisabled}
               >
                 {sortedCountryCodes.map(cc => (
@@ -380,7 +377,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
                 type="tel"
                 value={formData.phone_number}
                 onChange={(e) => handleChange('phone_number', e.target.value)}
-                className={`w-full px-4 py-2.5 border rounded-lg transition-colors ${errors.phone_number ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} focus:ring-2 focus:border-transparent ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                className={`flex-1 px-4 py-2.5 border rounded-lg transition-colors ${errors.phone_number ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} focus:ring-2 focus:border-transparent ${isFormDisabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 placeholder="Número de teléfono"
                 disabled={isFormDisabled}
               />
@@ -390,13 +387,14 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID de Usuario <span className="text-red-500">*</span>
+              ID de Usuario
             </label>
             <input
               type="text"
               value={formData.user_id}
               onChange={(e) => handleChange('user_id', e.target.value)}
               className={inputClass('user_id')}
+              placeholder="para metodo de pago"
               disabled={isFormDisabled}
             />
             {errors.user_id && <p className="mt-1 text-sm text-red-500">{errors.user_id}</p>}
@@ -404,7 +402,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Método de Pago <span className="text-red-500">*</span>
+              Método de Pago
             </label>
             <select
               value={formData.pay_method}
@@ -439,6 +437,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
                 <option key={estado} value={estado}>{estado}</option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-gray-400">estado de cuenta mico</p>
             {errors.estado && <p className="mt-1 text-sm text-red-500">{errors.estado}</p>}
           </div>
 
@@ -498,7 +497,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ID del Reclutador <span className="text-red-500">*</span>
+              MICO ID del Reclutador <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -506,7 +505,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               onChange={(e) => handleChange('rec_id', e.target.value)}
               className={inputClass('rec_id')}
               disabled={isFormDisabled}
-              placeholder="Ingresa tu ID de reclutador"
+              placeholder="Ingresa el MICO ID del reclutador"
             />
             {errors.rec_id && <p className="mt-1 text-sm text-red-500">{errors.rec_id}</p>}
           </div>
@@ -567,7 +566,6 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
               value={formData.captura}
               onChange={(url) => handleChange('captura', url)}
               disabled={isFormDisabled}
-              required
             />
             {errors.captura && <p className="mt-1 text-sm text-red-500">{errors.captura}</p>}
           </div>
