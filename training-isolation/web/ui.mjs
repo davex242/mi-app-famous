@@ -7,6 +7,7 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
 const agendaFilters = { enrollment: '', status: 'all' };
+const evidenceFilters = { enrollment: '', status: 'all' };
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Costa_Rica';
 const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
@@ -114,6 +115,7 @@ function exitSession() {
   clearMaterialVideo();
   state.token = null; state.actor = null; state.workspace = null;
   agendaFilters.enrollment=''; agendaFilters.status='all';
+  evidenceFilters.enrollment=''; evidenceFilters.status='all';
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   programUI.reset();
   updatesUI.reset();
@@ -155,6 +157,7 @@ function render() {
   document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === state.tab));
   const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, exams:examsUI.renderExams, closing:closingUI.renderClosing, agenda, evidence, library, history };
   $('#content').innerHTML = (state.actor.role === 'readonly' ? '<div class="readonly-note">Acceso de solo lectura: puedes consultar tu información asignada.</div>' : '') + views[state.tab]();
+  if (state.tab==='evidence') applyEvidenceFilters();
 }
 function overview() {
   const w = state.workspace, program = w.program_versions.find(p => p.id === w.enrollments[0]?.program_version_id) || w.program_versions[0];
@@ -205,16 +208,30 @@ function itemOptions(enrollmentId) {
 }
 function evidence() {
   const w = state.workspace;
+  if (!w.enrollments.some(e=>e.id===evidenceFilters.enrollment)) evidenceFilters.enrollment='';
   const sessions = w.sessions.filter(s => w.enrollments.some(e => e.id === s.enrollment_id && e.status === 'active'));
   const submit = canWrite() ? `<section class="panel"><h2>Envía una práctica</h2><p>Describe lo que realizó el emisor y, si lo necesitas, adjunta una imagen, un PDF o un clip MP4 privado. Solo el personal con acceso actual a este emisor puede verla o descargarla.</p><form id="evidence-form"><label>Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Descripción de la práctica<textarea name="description" maxlength="2000" required placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…"></textarea></label><label>Tipo de archivo opcional<select name="evidence_kind"><option value="image">Imagen PNG o JPEG</option><option value="pdf">Documento PDF</option><option value="video">Clip MP4</option></select></label><label><span id="evidence-file-label">Imagen de evidencia (opcional)</span><input name="evidence_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"><small id="evidence-image-help">Máximo 2 MiB y 2048 píxeles por lado, hasta 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce proporcionalmente hasta 768 píxeles por lado. Se eliminan los metadatos y el nombre original; la descarga será PNG.</small><small id="evidence-pdf-help" hidden>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Se descarga para revisión; no hay visor integrado.</small><small id="evidence-video-help" hidden>Máximo 2 MiB y 60 segundos. MP4 progresivo H.264 con audio AAC opcional; hasta 1280 píxeles por lado y 921600 píxeles en total. Se conserva el archivo original y sus metadatos. La reproducción comienza solo al pulsar Reproducir.</small></label><label class="check-label" id="evidence-consent-field" hidden><input name="consent_confirmed" type="checkbox"> Confirmo que tengo autorización para usar este archivo y el consentimiento de terceros, si aparecen.</label><button class="primary" type="submit" ${!sessions.length ? 'disabled' : ''}>Enviar a revisión →</button></form></section>` : '';
   const cards = w.evidence.slice().sort((a, b) => b.submitted_at.localeCompare(a.submitted_at)).map(e => {
     const review = isAdmin() && e.status === 'pending' && w.enrollments.some(n=>n.id===e.enrollment_id&&n.status==='active') ? `<form class="review-form" data-review="${esc(e.id)}"><label>Decisión<select name="decision"><option value="approved">Aprobar práctica</option><option value="rejected">Rechazar y solicitar corrección</option></select></label><label>Notas de revisión<textarea name="notes" maxlength="2000" required></textarea></label><button class="primary" type="submit">Registrar revisión</button></form>` : '';
     const enrollment=w.enrollments.find(n=>n.id===e.enrollment_id);
     const approval = w.approvals.find(a => a.evidence_id === e.id);
-    return `<article class="evidence-card">${pill(e.status)}<small>${esc(enrollment?enrollLabel(enrollment):'Emisor DEMO')}</small><h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${e.storage_path?`<p>${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'Documento privado · PDF · Solo descarga':e.storage_path===`sandbox/evidence/${e.id}.mp4`?'Video privado · MP4':'Imagen privada · PNG'}</p><div class="actions"><button class="secondary" data-preview-evidence="${esc(e.id)}" ${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'disabled':''}>Ver evidencia</button><button class="secondary" data-download-evidence="${esc(e.id)}">Descargar evidencia</button></div>`:''}${review}</article>`;
+    return `<article class="evidence-card" data-evidence-status="${esc(e.status)}" data-evidence-enrollment="${esc(e.enrollment_id)}">${pill(e.status)}<small>${esc(enrollment?enrollLabel(enrollment):'Emisor DEMO')}</small><h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${e.storage_path?`<p>${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'Documento privado · PDF · Solo descarga':e.storage_path===`sandbox/evidence/${e.id}.mp4`?'Video privado · MP4':'Imagen privada · PNG'}</p><div class="actions"><button class="secondary" data-preview-evidence="${esc(e.id)}" ${e.storage_path===`sandbox/evidence/${e.id}.pdf`?'disabled':''}>Ver evidencia</button><button class="secondary" data-download-evidence="${esc(e.id)}">Descargar evidencia</button></div>`:''}${review}</article>`;
   }).join('');
   const assess = isAdmin() ? `<section class="panel"><h2>Evaluación y validación administrativa</h2><p>La validación exige evidencia aprobada y evaluación satisfactoria. Conservamos cada revisión.</p><form id="assessment-form" class="form-grid"><label class="wide">Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Puntuación<input name="score" type="number" min="0" max="100" step="0.01" value="90" required></label><label>Resultado<select name="passed"><option value="true">Satisfactorio</option><option value="false">Requiere mejora</option></select></label><label class="wide">Notas<textarea name="notes" maxlength="2000" required></textarea></label><div class="wide actions"><button class="secondary" type="submit" ${!sessions.length ? 'disabled' : ''}>Guardar evaluación</button><button id="complete-button" class="primary" type="button" ${!sessions.length ? 'disabled' : ''}>Validar práctica ✓</button></div></form></section>` : '';
-  return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}<dialog id="evidence-preview"><div class="panel-head"><h2>Evidencia de la práctica</h2><button class="secondary" data-close-evidence>Cerrar</button></div><img id="evidence-preview-image" alt="Evidencia de la práctica"><video id="evidence-preview-video" controls playsinline preload="metadata" controlslist="nodownload noremoteplayback" disablepictureinpicture hidden></video><p id="evidence-video-error" class="error" role="alert" hidden>Este navegador no puede reproducir el clip. Puedes descargarlo y abrirlo con un reproductor compatible.</p></dialog>`;
+  const counts = [['pending','Pendientes'],['approved','Aprobadas'],['rejected','Requieren corrección']].map(([status,label])=>`<div class="evidence-total"><strong>${w.evidence.filter(e=>e.status===status).length}</strong><span>${label}</span></div>`).join('');
+  const filters=`<div class="evidence-filters"><label>Emisor en entrenamiento<select id="evidence-enrollment-filter"><option value="">Todos los entrenamientos</option>${w.enrollments.map(e=>`<option value="${esc(e.id)}" ${evidenceFilters.enrollment===e.id?'selected':''}>${esc(enrollLabel(e))}</option>`).join('')}</select></label><label>Estado de revisión<select id="evidence-status-filter">${[['all','Todas las evidencias'],['pending','Pendientes de revisión'],['approved','Aprobadas'],['rejected','Requieren corrección']].map(([value,label])=>`<option value="${value}" ${evidenceFilters.status===value?'selected':''}>${label}</option>`).join('')}</select></label></div>`;
+  return `<section class="panel evidence-inbox"><div class="panel-head"><div><h2>Evidencias y revisiones</h2><p>${isAdmin()?'Revisa las prácticas pendientes y deja indicaciones concretas para mejorar.':'Consulta la revisión de cada práctica y las correcciones solicitadas.'}</p></div></div><div class="evidence-totals">${counts}</div>${filters}<p id="evidence-visible-count" class="caption" role="status" aria-live="polite"></p>${cards ? `<div class="cards">${cards}</div><div id="evidence-filter-empty" hidden>${empty('Sin evidencias para estos filtros','Selecciona otro entrenamiento o muestra todos los estados.')}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section><div class="cols evidence-work">${submit}${assess}</div><dialog id="evidence-preview"><div class="panel-head"><h2>Evidencia de la práctica</h2><button class="secondary" data-close-evidence>Cerrar</button></div><img id="evidence-preview-image" alt="Evidencia de la práctica"><video id="evidence-preview-video" controls playsinline preload="metadata" controlslist="nodownload noremoteplayback" disablepictureinpicture hidden></video><p id="evidence-video-error" class="error" role="alert" hidden>Este navegador no puede reproducir el clip. Puedes descargarlo y abrirlo con un reproductor compatible.</p></dialog>`;
+}
+function applyEvidenceFilters() {
+  let visible=0;
+  document.querySelectorAll('.evidence-inbox .evidence-card').forEach(card=>{
+    card.hidden=!!((evidenceFilters.enrollment && card.dataset.evidenceEnrollment!==evidenceFilters.enrollment) || (evidenceFilters.status!=='all' && card.dataset.evidenceStatus!==evidenceFilters.status));
+    if(!card.hidden) visible++;
+  });
+  const count=$('#evidence-visible-count');
+  if(count) count.textContent=`${visible} de ${state.workspace.evidence.length} evidencias visibles`;
+  const emptyState=$('#evidence-filter-empty');
+  if(emptyState) emptyState.hidden=visible>0;
 }
 function library() {
   const w = state.workspace, materials = state.catalogueMode === 'materials';
@@ -283,6 +300,11 @@ $('#content').addEventListener('change', event => {
   examsUI.handleChange(event);
   updatesUI.handleChange(event);
   programUI.handleChange(event);
+  if (event.target.id==='evidence-enrollment-filter' || event.target.id==='evidence-status-filter') {
+    evidenceFilters.enrollment=$('#evidence-enrollment-filter').value;
+    evidenceFilters.status=$('#evidence-status-filter').value;
+    applyEvidenceFilters();
+  }
   if (event.target.id==='agenda-enrollment-filter' || event.target.id==='agenda-status-filter') {
     agendaFilters.enrollment=$('#agenda-enrollment-filter').value;
     agendaFilters.status=$('#agenda-status-filter').value;

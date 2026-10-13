@@ -28,7 +28,9 @@ test('persistent browser: truthful mode, restart and existing progress',async t=
    await runtime.close();runtime=null;runtime=await startPersistentSandbox(store,undefined,port);
    await login();assert.equal((await runtime.db.query('select id from public.training_enrollments')).rows[0].id,enrolledId);
    assert.equal((await runtime.db.query('select count(*)::int n from public.hosts')).rows[0].n,1);
-   assert.match(await page.locator('#content').textContent(),/0 de 14 prácticas/);assert.match(await page.locator('footer').textContent(),/Datos guardados localmente/);
+   assert.match(await page.locator('.progress-label').textContent(),/0 de 14/);
+   assert.equal(await page.locator('.progress-label progress').getAttribute('value'),'0');
+   assert.match(await page.locator('footer').textContent(),/Datos guardados localmente/);
    if(process.env.UI_SCREENSHOT_DIR){await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-persistent.png',fullPage:true});}
   });
   await t.test('persistent UI retains server authorization and keeps credentials out of browser storage',async()=>{

@@ -80,8 +80,31 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       administrator = await pageFor('superadmin');
       await administrator.locator('[data-tab="evidence"]').click();
       await administrator.locator('[data-review] [name="notes"]').fill('DEMO práctica revisada');
+      await administrator.locator('#evidence-status-filter').selectOption('approved');
+      assert.equal(await administrator.locator('.evidence-card:visible').count(),0);
+      assert.equal(await administrator.locator('#evidence-filter-empty').isVisible(),true);
+      await administrator.locator('#evidence-status-filter').selectOption('pending');
+      assert.equal(await administrator.locator('.evidence-card:visible').count(),1);
+      assert.equal(await administrator.locator('[data-review] [name="notes"]').inputValue(),'DEMO práctica revisada');
+      await administrator.setViewportSize({width:390,height:844});
+      assert.equal(await administrator.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+      if(process.env.UI_SCREENSHOT_DIR){
+        // Use readable DEMO copy for the preview; the injection fixture was verified above.
+        const description=administrator.locator('.evidence-card p').first();
+        const original=await description.textContent();
+        await description.evaluate(node=>{node.textContent='DEMO · Presentación del emisor y práctica de networking.';});
+        await administrator.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/training-evidence-review-mobile.png`,fullPage:true});
+        await administrator.setViewportSize({width:1440,height:1050});
+        await administrator.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/training-evidence-review.png`,fullPage:true});
+        await description.evaluate((node,value)=>{node.textContent=value;},original);
+      }
+      await administrator.setViewportSize({width:1440,height:1050});
       await administrator.locator('[data-review] button').click();
       await administrator.locator('#notice').filter({ hasText: 'Revisión registrada' }).waitFor();
+      assert.equal(await administrator.locator('.evidence-card:visible').count(),0);
+      await administrator.locator('#evidence-status-filter').selectOption('approved');
+      assert.equal(await administrator.locator('.evidence-card:visible').count(),1);
+      assert.equal(await administrator.locator('[data-review]').count(),0);
       await administrator.locator('#complete-button').click();
       await administrator.locator('#notice.error').filter({ hasText: 'Falta una evaluación' }).waitFor();
       assert.equal((await db.query('select * from public.training_completions')).rows.length, 0);
