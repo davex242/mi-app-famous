@@ -13,7 +13,7 @@ npm ci --prefix training-isolation --ignore-scripts
 npm test --prefix training-isolation
 ```
 
-La dependencia está fijada a `@electric-sql/pglite@0.5.9` y tiene su propio lockfile. No se cambian package.json ni package-lock.json de la app, ni se incluye PGlite en su bundle. Se eligió PostgreSQL en memoria porque en esta sesión no hay Docker/PostgreSQL nativo y el backend activo es DatabasePad, no un proyecto Supabase identificado entre los conectados. No se creó un proyecto cloud ni se modificó Mi Taller de Costura.
+Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.58.2`, con lockfile propio. Playwright se usa exclusivamente para verificar la nueva interfaz en navegador. No se cambian package.json ni package-lock.json de la app, ni se incluyen estas herramientas en su bundle. Se eligió PostgreSQL en memoria porque en esta sesión no hay Docker/PostgreSQL nativo y el backend activo es DatabasePad, no un proyecto Supabase identificado entre los conectados. No se creó un proyecto cloud ni se modificó Mi Taller de Costura.
 
 ## Qué valida
 
@@ -27,7 +27,7 @@ La dependencia está fijada a `@electric-sql/pglite@0.5.9` y tiene su propio loc
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Con la API local añadida: **189 pruebas pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir API e interfaz: **190 pruebas de SQL/API y 9 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -35,7 +35,28 @@ Resultado inicial: 163 pruebas de SQL/RLS pasaron. Con la API local añadida: **
 npm start --prefix training-isolation
 ```
 
-Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO y contraseñas aleatorias que se regeneran cada vez, además de IDs de un emisor sintético asignado a demo-edit y un programa DEMO de 14 días. No hay interfaz gráfica ni conexiones a la app activa. Terminar el proceso elimina usuarios, sesiones y todos los datos.
+Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO y contraseñas aleatorias que se regeneran cada vez, además de IDs de un emisor sintético asignado a demo-edit y un programa DEMO de 14 días. Abre esa dirección en el navegador para usar la nueva interfaz. No hay conexiones a la app activa. Terminar el proceso elimina usuarios, sesiones y todos los datos.
+
+## Vista de prueba
+
+La interfaz en `web/` usa HTML, CSS y JavaScript sin dependencias de frontend, fuentes remotas ni CDN. Todas las peticiones van a rutas relativas de esta misma API local. El servidor entrega únicamente tres archivos de la interfaz mediante una lista cerrada de rutas; no permite descargar el código de servidor, las credenciales ni archivos arbitrarios. CSP limita recursos y conexiones al mismo origen. El token vive solo en memoria: recargar la página exige iniciar sesión otra vez.
+
+Vistas: Resumen, Agenda, Evidencias, Biblioteca e Historial. Los administradores tienen formularios de revisión, evaluación y validación; el reclutador trabaja con sus emisores; readonly consulta su alcance sin formularios de escritura. La autorización final permanece en el servidor. Temas y programas de esta entrega son DEMO; no hay acciones de publicación o descarga ficticias. Los próximos módulos están indicados como futuros. Los mensajes confirman exclusivamente guardado temporal real.
+
+Para ensayar visualmente: entra como Reclutador con la contraseña de demo-edit, inscribe el emisor y agrega una sesión en Agenda; después envía su práctica desde Evidencias. Cierra sesión y entra como Superadmin o Subadmin para revisar la práctica, guardar una evaluación y validarla. Historial conserva revisiones y notas durante la ejecución del servidor. Solo lectura no tiene emisor asignado al arrancar; el test de navegador asigna un emisor ficticio para verificar esa vista.
+
+Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png) y [móvil](preview/training-mobile.png). No son una URL pública del sitio.
+
+Para repetir las pruebas de navegador:
+
+```sh
+npx --prefix training-isolation playwright install chromium
+npm run test:ui --prefix training-isolation
+```
+
+Alternativamente, `BROWSER_EXECUTABLE_PATH` puede señalar un Chromium instalado localmente. En esta sesión la descarga estándar del navegador falló; la revisión se ejecutó con Chromium 133 extraído de un paquete de QA temporal. Playwright permanece fijado en el paquete de pruebas, pero ese Chromium alternativo no se añade como dependencia ni se entrega en el repositorio.
+
+Los tests recorren login, inscripción, conversión de hora de Costa Rica a UTC, agenda, evidencias, bloqueo de autoaprobación, revisión, evaluación, validación, historial, logout, pantalla móvil, ausencia de desbordamiento horizontal y ausencia de peticiones externas. También prueban que texto con HTML no ejecuta scripts y que ninguna sesión se guarda en localStorage/sessionStorage. Las capturas se generan opcionalmente con `UI_SCREENSHOT_DIR`.
 
 `POST /api/login` recibe `{ "username": "demo-edit", "password": "contraseña-local-generada" }`. Devuelve un token opaco temporal; las demás llamadas usan `Authorization: Bearer <token>`. No se aceptan roles ni IDs de actor aportados por el cliente. No hay endpoint de registro ni de cambio de rol. Las contraseñas de fixture usan scrypt con sal aleatoria; los tokens se almacenan como SHA-256 y vencen en una hora. En cada operación se vuelven a consultar actividad y rol del puente privado. Logout revoca la sesión. Esta autenticación solo pertenece al sandbox: no reemplaza Supabase Auth ni el login existente.
 

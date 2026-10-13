@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createIsolatedDatabase } from './database.mjs';
 import { createTrainingService, provisionSyntheticUser, ApiError } from './service.mjs';
 import { seedDemoProgram } from './demo-fixtures.mjs';
@@ -25,6 +26,16 @@ export function createSandboxHttpServer(service) {
       const limit = limits.get(key) ?? { count: 0, until: now + 60000 };
       limit.count++; limits.set(key, limit);
       if (limit.count > (path === '/api/login' ? 20 : 200)) throw new ApiError(429, 'Try again later');
+      const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
+      if (req.method === 'GET' && assets[path]) {
+        const [file, mime] = assets[path];
+        const content = await readFile(new URL(`web/${file}`, import.meta.url));
+        res.writeHead(200, {
+          'content-type': mime, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+          'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
+        });
+        return res.end(content);
+      }
       if (req.method === 'GET' && path === '/health') return send(200, { sandbox: true, storage: 'memory' });
       const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? '')?.[1];
       if (req.method === 'GET' && path === '/api/me') return send(200, await service.me(token));

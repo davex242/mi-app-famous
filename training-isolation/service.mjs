@@ -91,9 +91,11 @@ export function createTrainingService(db) {
       return (await tx.query('select * from public.training_enrollments order by started_at,id')).rows;
     }),
     workspace: token => run(token, async (tx, actor) => {
+      const trainees = (await tx.query(`select host_id,recruiter_id from training_private.training_host_assignments
+        where $1::boolean or recruiter_id=$2 order by host_id`, [admin(actor), actor.app_user_id])).rows;
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec('set local role authenticated');
-      const result = { sandbox: true };
+      const result = { sandbox: true, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
       for (const table of ['topics', 'program_versions', 'program_items', 'enrollments', 'sessions', 'evidence', 'assessments', 'approvals', 'completions']) {
         // Static table allowlist; never accepts a table name from a caller.
         result[table] = (await tx.query(`select * from public.training_${table}`)).rows;

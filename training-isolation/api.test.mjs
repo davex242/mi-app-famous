@@ -190,6 +190,19 @@ test('isolated HTTP API: sessions, scope and practical validation', async t => {
       for (let i = 0; i < 21; i++) status = (await request('/api/login', { username: 'missing', password: 'short' })).status;
       assert.equal(status, 429);
     });
+    await t.test('isolated UI assets use same-origin security headers', async () => {
+      for (const path of ['/', '/ui.mjs', '/ui.css']) {
+        const response = await fetch(url + path);
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('content-security-policy'), /connect-src 'self'/);
+        assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+        assert.equal(response.headers.get('cache-control'), 'no-store');
+        const content = await response.text();
+        assert.ok(!content.includes('databasepad.com'));
+        assert.ok(!content.includes('service_role'));
+      }
+      assert.equal((await fetch(url + '/service.mjs')).status, 404);
+    });
   } finally {
     await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
     await db.close();

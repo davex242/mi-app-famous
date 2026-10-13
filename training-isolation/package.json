@@ -4,8 +4,14 @@
   "type": "module",
   "scripts": {
     "test": "node --test isolation.test.mjs api.test.mjs",
+    "test:ui": "node --test ui.test.mjs",
     "start": "node server.mjs"
   },
-  "devDependencies": { "@electric-sql/pglite": "0.5.9" },
-  "engines": { "node": ">=20" }
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.9",
+    "playwright": "1.58.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
