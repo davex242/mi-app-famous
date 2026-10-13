@@ -10,6 +10,7 @@ import { seedDemoProgram } from './demo-fixtures.mjs';
 
 test('isolated browser UI: recruiter, administration and mobile', async t => {
   const db = await createIsolatedDatabase();
+  const service=createTrainingService(db);
   let browser, server;
   const password = 'Browser-test-password-ONLY';
   const pages = [], errors = [], remoteRequests = [];
@@ -17,12 +18,13 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
     const users = {};
     for (const role of ['superadmin', 'subadmin', 'edit', 'readonly']) users[role] = await provisionSyntheticUser(db, `demo-${role}`, password, role);
     const demo = await seedDemoProgram(db, users.superadmin.app_user_id, users.edit.app_user_id);
-    server = createSandboxHttpServer(createTrainingService(db));
+    server = createSandboxHttpServer(service);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const url = `http://127.0.0.1:${server.address().port}`;
     browser = await chromium.launch({ headless: true,
       ...(process.env.BROWSER_EXECUTABLE_PATH ? { executablePath: process.env.BROWSER_EXECUTABLE_PATH } : {}),
       args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+    if(process.env.UI_SCREENSHOT_DIR)await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});
     async function pageFor(role, viewport = { width: 1440, height: 1050 }) {
       const context = await browser.newContext({ viewport, locale: 'es-CR', timezoneId: 'America/Costa_Rica' });
       const page = await context.newPage(); pages.push(page);
@@ -245,6 +247,56 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal(await recruiter.locator('#program-form').count(), 0);
       assert.equal(await recruiter.locator('[data-publish-program]').count(), 0);
     });
+    let optionalVersion;
+    await t.test('completed practical credit and a new published version do not force an update',async()=>{
+      const editor=(await service.login({username:'demo-edit',password})).token;
+      const administratorToken=(await service.login({username:'demo-superadmin',password})).token;
+      const evidence=await service.submitEvidence(editor,{session_id:generatedSession.id,description:'DEMO práctica para conservar'});
+      await service.reviewEvidence(administratorToken,{evidence_id:evidence.id,decision:'approved',notes:'DEMO verificada'});
+      await service.assess(administratorToken,{session_id:generatedSession.id,score:95,passed:true,notes:'DEMO habilidades validadas'});
+      await service.completeItem(administratorToken,{session_id:generatedSession.id});
+      const source=(await db.query('select id from public.training_program_versions where program_key=$1 and version=2',[authoredProgram.program_key])).rows[0];
+      await administrator.locator('[data-tab="programs"]').click();
+      await administrator.locator(`[data-edit-program="${source.id}"]`).click();
+      await administrator.locator('#program-form [name="changelog"]').fill('DEMO nueva práctica opcional');
+      await administrator.locator('[data-add-program-item]').click();
+      await administrator.locator('#program-form button[type="submit"]').click();
+      await administrator.locator('#notice').filter({hasText:'Programa guardado como borrador'}).waitFor();
+      optionalVersion=(await db.query('select * from public.training_program_versions where program_key=$1 and version=3',[authoredProgram.program_key])).rows[0];
+      await administrator.locator(`[data-publish-program="${optionalVersion.id}"]`).click();
+      await administrator.locator('#notice').filter({hasText:'Programa publicado'}).waitFor();
+      assert.equal((await db.query('select program_version_id from public.training_enrollments where id=$1',[authoredEnrollment.id])).rows[0].program_version_id,authoredProgram.id);
+    });
+    await t.test('recruiter can review and decline the optional update without changing training',async()=>{
+      await recruiter.locator('[data-tab="updates"]').click();
+      await recruiter.locator('#refresh-button').click();
+      await recruiter.locator('#notice').filter({hasText:'Información actualizada'}).waitFor();
+      await recruiter.locator('#update-preview-form [name="enrollment_id"]').selectOption(authoredEnrollment.id);
+      await recruiter.locator('#update-preview-form [name="to_version_id"]').selectOption(optionalVersion.id);
+      await recruiter.locator('#update-preview-form button').click();
+      await recruiter.locator('#notice').filter({hasText:'Comparación preparada'}).waitFor();
+      assert.equal(await recruiter.locator('.update-comparison .stat strong').first().textContent(),'1');
+      if(process.env.UI_SCREENSHOT_DIR)await recruiter.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/training-updates.png`,fullPage:true});
+      await recruiter.locator('[data-decline-program-update]').click();
+      await recruiter.locator('#notice').filter({hasText:'Se mantiene la versión actual'}).waitFor();
+      assert.equal((await db.query('select * from public.training_update_history')).rows.length,0);
+    });
+    await t.test('acceptance preserves sessions and validations and agenda proposes only new work',async()=>{
+      const original=(await db.query('select * from public.training_sessions where enrollment_id=$1 order by id',[authoredEnrollment.id])).rows;
+      await recruiter.locator('#update-preview-form button').click();
+      await recruiter.locator('#notice').filter({hasText:'Comparación preparada'}).waitFor();
+      await recruiter.locator('[data-accept-program-update]').click();
+      await recruiter.locator('#notice').filter({hasText:'Actualización aceptada'}).waitFor();
+      assert.equal((await db.query('select program_version_id from public.training_enrollments where id=$1',[authoredEnrollment.id])).rows[0].program_version_id,optionalVersion.id);
+      assert.deepEqual((await db.query('select * from public.training_sessions where enrollment_id=$1 order by id',[authoredEnrollment.id])).rows,original);
+      await recruiter.locator('[data-tab="agenda"]').click();
+      await recruiter.locator('#auto-agenda-form [name="enrollment_id"]').selectOption(authoredEnrollment.id);
+      await recruiter.locator('#auto-agenda-form [name="start_date"]').fill('2026-11-02');
+      await recruiter.locator('#auto-agenda-form button').click();
+      await recruiter.locator('#notice').filter({hasText:'Propuesta calculada'}).waitFor();
+      assert.match(await recruiter.locator('#agenda-proposal').textContent(),/1 sesiones nuevas/);
+      assert.equal((await db.query('select * from public.training_update_history')).rows.length,1);
+    });
     await t.test('mobile layout fits viewport and exposes readonly data without actions', async () => {
       await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2', [users.readonly.app_user_id, demo.host_id]);
       const mobile = await pageFor('readonly', { width: 390, height: 844 });
@@ -256,6 +308,17 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal(await mobile.locator('#assessment-form').count(), 0);
       assert.equal(await mobile.locator('.evidence-card').count(), 1);
       assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    });
+    await t.test('readonly can consult update history on mobile without accepting changes',async()=>{
+      await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,authoredEnrollment.host_id]);
+      const mobile=pages[2];
+      await mobile.locator('[data-tab="updates"]').click();
+      await mobile.locator('#refresh-button').click();
+      await mobile.locator('#notice').filter({hasText:'Información actualizada'}).waitFor();
+      assert.equal(await mobile.locator('#update-preview-form').count(),0);
+      assert.equal(await mobile.locator('[data-accept-program-update]').count(),0);
+      assert.match(await mobile.locator('#content').textContent(),/v1 → v3/);
+      assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
     });
     await t.test('logout clears screen and tokens stay out of browser storage', async () => {
       assert.equal(await recruiter.evaluate(() => localStorage.length + sessionStorage.length), 0);
@@ -277,12 +340,8 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-library.png`, fullPage: true });
       await administrator.locator('[data-tab="programs"]').click();
       await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-programs.png`, fullPage: true });
-      await recruiter.locator('#login-form [name="username"]').selectOption('demo-edit');
-      await recruiter.locator('#login-form [name="password"]').fill(password);
-      await recruiter.locator('#login-form button').click();
-      await recruiter.locator('#app-view').waitFor({ state: 'visible' });
-      await recruiter.locator('[data-tab="agenda"]').click();
-      await recruiter.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-agenda.png`, fullPage: true });
+      await administrator.locator('[data-tab="agenda"]').click();
+      await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-agenda.png`, fullPage: true });
       const mobile = pages[2];
       await mobile.locator('[data-tab="overview"]').click();
       await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-mobile.png`, fullPage: true });

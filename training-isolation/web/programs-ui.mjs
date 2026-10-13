@@ -98,5 +98,5 @@ export function createProgramUI({ state, zone, esc, opt, empty, pill, isAdmin, c
     if(button.hasAttribute('data-generate-agenda')){if(previewBody)action('/api/agenda/generate',previewBody,result=>`${result.created} sesiones creadas; ${result.skipped} sesiones existentes conservadas.`,()=>{preview=null;previewBody=null;});return true;}
     return false;
   }
-  return {renderPrograms,renderAgendaExtras,handleChange,handleSubmit,handleClick,reset(){draft=null;preview=null;previewBody=null;controls=null;}};
+  return {renderPrograms,renderAgendaExtras,handleChange,handleSubmit,handleClick,invalidateAgenda(){preview=null;previewBody=null;},reset(){draft=null;preview=null;previewBody=null;controls=null;}};
 }

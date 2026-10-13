@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { createCatalogueOperations } from './catalogue.mjs';
 import { createProgramOperations, ensureNoSessionOverlap } from './programs.mjs';
+import { createUpdateOperations, effectiveItemId, updateHistory, currentProgress, propagateCompletion } from './updates.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -66,6 +67,7 @@ export function createTrainingService(db) {
   return {
     ...createCatalogueOperations(run, { requireAdmin, fields, text, uuid, fail, audit, admin }),
     ...createProgramOperations(run, { fields, text, uuid, fail, requireAdmin, requireWrite, enrollment, session, audit }),
+    ...createUpdateOperations(run,{fields,uuid,fail,requireWrite,enrollment,audit}),
     async login(body) {
       fields(body, ['username', 'password']);
       const username = text(body.username, 80);
@@ -100,12 +102,18 @@ export function createTrainingService(db) {
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec('set local role authenticated');
       const result = { sandbox: true, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
-      for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'program_materials', 'enrollments', 'sessions', 'attendance', 'evidence', 'assessments', 'approvals', 'completions', 'events']) {
+      for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'program_materials', 'enrollments', 'update_history', 'sessions', 'attendance', 'evidence', 'assessments', 'approvals', 'completions', 'events']) {
         // Static table allowlist; never accepts a table name from a caller.
         result[table] = (await tx.query(`select * from public.training_${table}`)).rows;
       }
       // Material content and link targets require a separate permission-checked request.
       result.materials = result.materials.map(material => ({ ...material, external_url: null }));
+      result.progress=[];
+      for(const e of result.enrollments) result.progress.push(await currentProgress(tx,e));
+      result.sessions=result.sessions.map(s=>{
+        const e=result.enrollments.find(e=>e.id===s.enrollment_id);
+        return {...s,current_item_id:effectiveItemId(s.item_id,result.update_history.filter(h=>h.enrollment_id===s.enrollment_id),result.program_items.filter(i=>i.program_version_id===e?.program_version_id))};
+      });
       return result;
     }),
     enroll: (token, body) => run(token, async (tx, actor) => {
@@ -128,6 +136,10 @@ export function createTrainingService(db) {
       if (!items.length) fail(409, 'Item does not belong to enrollment version');
       if (typeof body.scheduled_at !== 'string' || !/Z$/.test(body.scheduled_at) || !Number.isFinite(Date.parse(body.scheduled_at))) fail(400, 'UTC date required');
       if (!Number.isInteger(body.duration_minutes) || body.duration_minutes < 1 || body.duration_minutes > 480) fail(400, 'Invalid duration');
+      const retained=(await tx.query('select item_id from public.training_sessions where enrollment_id=$1',[e.id])).rows;
+      const history=await updateHistory(tx,e.id);
+      if(retained.some(s=>effectiveItemId(s.item_id,history,items)===items[0].id)) fail(409,'This practice already has a preserved session');
+      if((await tx.query('select item_id from public.training_completions where enrollment_id=$1 and item_id=$2',[e.id,items[0].id])).rows.length) fail(409,'This practice is already validated');
       await ensureNoSessionOverlap(tx, e.id, body.scheduled_at, body.duration_minutes, null, fail);
       const { rows } = await tx.query(`insert into public.training_sessions(enrollment_id,item_id,topic_id,scheduled_at,duration_minutes,auto_generated,edited_manually)
         values($1,$2,$3,$4,$5,false,true) returning *`, [e.id, items[0].id, items[0].topic_id, body.scheduled_at, body.duration_minutes]);
@@ -186,6 +198,9 @@ export function createTrainingService(db) {
         await tx.query("update public.training_sessions set status='completed' where id=$1", [s.id]);
         await audit(tx, actor, 'item_completed', 'session', s.id, s.enrollment_id);
       }
+      const credit=(await tx.query('select * from public.training_completions where enrollment_id=$1 and item_id=$2',[s.enrollment_id,s.item_id])).rows[0];
+      const e=await enrollment(tx,actor,s.enrollment_id);
+      await propagateCompletion(tx,e,credit);
       // Finishing one item does NOT complete the whole enrollment or bypass Final Quiz.
       return { item_id: s.item_id, completed: true, already_completed: !result.rows.length };
     }),

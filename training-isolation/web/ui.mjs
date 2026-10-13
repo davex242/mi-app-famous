@@ -1,4 +1,5 @@
 import { createProgramUI } from './programs-ui.mjs';
+import { createUpdatesUI } from './updates-ui.mjs';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
@@ -35,6 +36,12 @@ const errors = {
   'Session schedule changed; refresh first': 'Otra acción cambió esta sesión. Actualiza la agenda antes de reprogramar.',
   'Completed sessions cannot be rescheduled': 'Las sesiones completadas conservan su fecha.',
   'Attendance changed; refresh first': 'La asistencia cambió. Actualiza antes de guardar otra revisión.',
+  'Training changed; preview the update again': 'El entrenamiento cambió desde la comparación. Revisa la actualización otra vez.',
+  'Enrollment version changed; preview again': 'La versión asignada cambió. Revisa una comparación nueva.',
+  'Choose a newer published version of the same program': 'Selecciona una versión más reciente, publicada y del mismo programa.',
+  'Only active or paused enrollments can update': 'Solo se pueden actualizar entrenamientos en curso o en pausa.',
+  'This practice already has a preserved session': 'Esta práctica ya tiene una sesión conservada de una versión anterior.',
+  'This practice is already validated': 'Esta práctica ya está validada.',
 };
 const isAdmin = () => ['superadmin', 'subadmin'].includes(state.actor?.role);
 const canWrite = () => isAdmin() || state.actor?.role === 'edit';
@@ -46,6 +53,7 @@ const trainee = id => state.workspace.trainees.find(t => t.host_id === id)?.labe
 const enrollLabel = enrollment => `${trainee(enrollment.host_id)} · Programa ${state.workspace.program_versions.find(p => p.id === enrollment.program_version_id)?.version || 1}`;
 const date = value => value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(value)) : '—';
 const programUI = createProgramUI({ state, zone, esc, opt, empty, pill, isAdmin, canWrite, api, action, render, notify, topic, date, enrollLabel });
+const updatesUI = createUpdatesUI({state,esc,opt,empty,isAdmin,canWrite,api,action,render,notify,enrollLabel,topic,date,invalidateAgenda:programUI.invalidateAgenda});
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.className = error ? 'error' : ''; node.hidden = false;
 }
@@ -53,6 +61,7 @@ function exitSession() {
   state.token = null; state.actor = null; state.workspace = null;
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   programUI.reset();
+  updatesUI.reset();
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -81,10 +90,10 @@ function render() {
     ['Emisores asignados', w.trainees.length, 'Perfiles ficticios'],
     ['Sesiones programadas', w.sessions.filter(s => ['scheduled','rescheduled'].includes(s.status)).length, 'Agenda de entrenamiento'],
     ['Evidencias pendientes', w.evidence.filter(e => e.status === 'pending').length, 'Esperan revisión administrativa'],
-    ['Prácticas validadas', w.completions.length, 'Quiz final todavía pendiente'],
+    ['Prácticas validadas', w.progress.reduce((n,p)=>n+p.completed_items,0), 'Validaciones de la versión asignada'],
   ].map(([name, count, note]) => `<article class="stat"><label>${name}</label><strong>${count}</strong><small>${note}</small></article>`).join('');
   document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === state.tab));
-  const views = { overview, programs: programUI.renderPrograms, agenda, evidence, library, history };
+  const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, agenda, evidence, library, history };
   $('#content').innerHTML = (state.actor.role === 'readonly' ? '<div class="readonly-note">Acceso de solo lectura: puedes consultar tu información asignada.</div>' : '') + views[state.tab]();
 }
 function overview() {
@@ -97,7 +106,7 @@ function overview() {
     return `<div class="day ${done ? 'done' : planned ? 'planned' : ''}"><span>DÍA ${item.day}</span><strong>Práctica ${item.day}</strong><small>${done ? `${done} validada${done > 1 ? 's' : ''}` : planned ? 'En agenda' : 'Por programar'}</small></div>`;
   }).join('')}</div>` : empty('Sin programa publicado', 'El catálogo está vacío en este entorno.');
   const enrollmentForm = canWrite() ? `<form id="enroll-form"><label>Emisor<select name="host_id" required>${available.length ? available.map(t => opt(t.host_id, t.label)).join('') : opt('', 'Sin emisores pendientes de inscripción')}</select></label><label>Programa publicado<select name="program_version_id" required>${w.program_versions.filter(p => p.status === 'published').map(p => opt(p.id, p.title)).join('')}</select></label><label>Zona horaria<input name="timezone" value="${esc(zone)}" required></label><button class="primary" type="submit" ${!available.length ? 'disabled' : ''}>Inscribir emisor →</button></form>` : '<p class="caption">Las inscripciones las gestiona tu reclutador o un administrador.</p>';
-  const rows = w.enrollments.map(e => `<div class="list-row"><div><p>${esc(trainee(e.host_id))}</p><small>${esc(e.timezone)} · ${w.completions.filter(c => c.enrollment_id === e.id).length} prácticas validadas</small></div>${pill(e.status)}</div>`).join('');
+  const rows = w.enrollments.map(e => {const progress=w.progress.find(p=>p.enrollment_id===e.id);return `<div class="list-row"><div><p>${esc(trainee(e.host_id))}</p><small>${esc(e.timezone)} · ${progress.completed_items} de ${progress.total_items} prácticas · ${progress.percent.toLocaleString('es-CR')}%</small></div>${pill(e.status)}</div>`;}).join('');
   return `<div class="panel"><div class="panel-head"><div><h2>Un programa, a tu ritmo</h2><p>${esc(program?.title || 'Programa DEMO')} · Duración inicial flexible, sin perder de vista el progreso.</p></div><span class="pill">DEMO · ${program?.duration_days || 14} días</span></div>${grid}</div><div class="cols"><section class="panel"><h2>Emisores en entrenamiento</h2>${rows || empty('Todo empieza con una inscripción', 'Inscribe un emisor DEMO para comenzar su agenda.')}</section><section class="panel"><h2>${canWrite() ? 'Nueva inscripción' : 'Tu seguimiento'}</h2>${enrollmentForm}</section></div>`;
 }
 function agenda() {
@@ -108,13 +117,13 @@ function agenda() {
     const e = w.enrollments.find(e => e.id === s.enrollment_id);
     const attendance = w.attendance.find(a=>a.session_id===s.id);
     const attendanceLabels = {present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'};
-    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td><td>${esc(attendance ? attendanceLabels[attendance.status] : 'Sin registro')}</td></tr>`;
+    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}${s.current_item_id ? '' : ' · Histórica: versión anterior'}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td><td>${esc(attendance ? attendanceLabels[attendance.status] : 'Sin registro')}</td></tr>`;
   }).join('');
   return extras.automatic + schedule + `<section class="panel"><div class="panel-head"><div><h2>Agenda de entrenamiento</h2><p>Las horas se muestran en tu zona: ${esc(zone)}.</p></div></div>${rows ? `<div class="table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th><th>Asistencia</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu agenda está lista para empezar', 'Crea una inscripción y programa su primera práctica.')}</section>` + extras.controls;
 }
 function itemOptions(enrollmentId) {
   const version = state.workspace.enrollments.find(e => e.id === enrollmentId)?.program_version_id;
-  return state.workspace.program_items.filter(item => item.program_version_id === version && !state.workspace.sessions.some(s=>s.enrollment_id===enrollmentId && s.item_id===item.id)).sort((a, b) => a.day - b.day).map(item => opt(item.id, `Día ${item.day} · ${topic(item.topic_id)}`)).join('');
+  return state.workspace.program_items.filter(item => item.program_version_id === version && !state.workspace.sessions.some(s=>s.enrollment_id===enrollmentId && (s.current_item_id||s.item_id)===item.id) && !state.workspace.completions.some(c=>c.enrollment_id===enrollmentId && c.item_id===item.id)).sort((a, b) => a.day - b.day).map(item => opt(item.id, `Día ${item.day} · ${topic(item.topic_id)}`)).join('');
 }
 function evidence() {
   const w = state.workspace;
@@ -182,6 +191,7 @@ $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
 $('#content').addEventListener('change', event => {
+  updatesUI.handleChange(event);
   programUI.handleChange(event);
   if (event.target.matches('#schedule-form [name="enrollment_id"]')) {
     const options=itemOptions(event.target.value); $('#schedule-form [name="item_id"]').innerHTML = options || opt('', 'Todas las prácticas ya tienen sesión');
@@ -197,6 +207,7 @@ $('#content').addEventListener('change', event => {
 });
 $('#content').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
+  if (await updatesUI.handleSubmit(form,data)) return;
   if (await programUI.handleSubmit(form,data)) return;
   if (form.id === 'enroll-form') action('/api/enrollments', data, 'Emisor inscrito.');
   if (form.id === 'schedule-form') {
@@ -219,6 +230,7 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (await updatesUI.handleClick(button)) return;
   if (await programUI.handleClick(button)) return;
   if (event.target.id === 'complete-button') action('/api/items/complete', { session_id: $('#assessment-form [name="session_id"]').value }, 'Práctica validada.');
   if (button.dataset.catalogueMode) { state.catalogueMode = button.dataset.catalogueMode; render(); }

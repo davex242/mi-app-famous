@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { effectiveItemId, updateHistory } from './updates.mjs';
 
 export async function ensureNoSessionOverlap(tx, enrollmentId, start, duration, ignored, fail) {
   const result = await tx.query(`select id from public.training_sessions where enrollment_id=$1
@@ -48,7 +49,9 @@ export function createProgramOperations(run, { fields, text, uuid, fail, require
     const items = (await tx.query(`select i.*,t.estimated_minutes from public.training_program_items i
       join public.training_topics t on t.id=i.topic_id where program_version_id=$1 order by day,position`, [e.program_version_id])).rows;
     if (!items.length || items.length > 180) fail(409, 'Program has no valid agenda items');
-    const existing = (await tx.query('select item_id from public.training_sessions where enrollment_id=$1', [e.id])).rows;
+    const history=await updateHistory(tx,e.id);
+    const existing = (await tx.query('select item_id from public.training_sessions where enrollment_id=$1', [e.id])).rows.map(row=>({item_id:effectiveItemId(row.item_id,history,items)}));
+    existing.push(...(await tx.query('select item_id from public.training_completions where enrollment_id=$1',[e.id])).rows);
     const dates = [], cursor = new Date(start);
     while (dates.length < version.duration_days) {
       if (cursor.getUTCFullYear() > 2099) fail(400, 'Valid calendar date required');
