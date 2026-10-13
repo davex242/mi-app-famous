@@ -4,6 +4,7 @@ import { createCatalogueOperations } from './catalogue.mjs';
 import { createProgramOperations, ensureNoSessionOverlap } from './programs.mjs';
 import { createUpdateOperations, effectiveItemId, updateHistory, currentProgress, propagateCompletion } from './updates.mjs';
 import { createExamOperations } from './exams.mjs';
+import {createClosingOperations,scopedClosingRecords,scopedExamIssuances} from './closing.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -70,6 +71,7 @@ export function createTrainingService(db) {
     ...createProgramOperations(run, { fields, text, uuid, fail, requireAdmin, requireWrite, enrollment, session, audit }),
     ...createUpdateOperations(run,{fields,uuid,fail,requireWrite,enrollment,audit}),
     ...createExamOperations(db,run,{fields,text,uuid,fail,requireAdmin,requireWrite,enrollment,audit}),
+    ...createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,enrollment,audit}),
     async login(body) {
       fields(body, ['username', 'password']);
       const username = text(body.username, 80);
@@ -102,19 +104,21 @@ export function createTrainingService(db) {
       const trainees = (await tx.query(`select host_id,recruiter_id from training_private.training_host_assignments
         where $1::boolean or recruiter_id=$2 order by host_id`, [admin(actor), actor.app_user_id])).rows;
       const exams=(await tx.query("select id,exam_key,version,status,question_count,pass_percent from public.training_exam_versions where status='published' order by exam_key,version desc")).rows;
+      const closingRecords=await scopedClosingRecords(tx,actor,admin);
+      const issuances=await scopedExamIssuances(tx,actor,admin);
       const revoked=(await tx.query(`select t.assignment_id,t.revoked_at from training_private.training_exam_tokens t
         join public.training_exam_assignments a on a.id=t.assignment_id join training_private.training_host_assignments h on h.host_id=a.host_id
         where $1::boolean or h.recruiter_id=$2`,[admin(actor),actor.app_user_id])).rows;
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec('set local role authenticated');
-      const result = { sandbox: true, exams, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
+      const result = { sandbox: true, exams,closing_records:closingRecords, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
       for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'program_materials', 'enrollments', 'update_history', 'sessions', 'attendance', 'evidence', 'assessments', 'approvals', 'completions', 'events']) {
         // Static table allowlist; never accepts a table name from a caller.
         result[table] = (await tx.query(`select * from public.training_${table}`)).rows;
       }
       // Material content and link targets require a separate permission-checked request.
       result.materials = result.materials.map(material => ({ ...material, external_url: null }));
-      result.exam_assignments=(await tx.query('select * from public.training_exam_assignments')).rows.map(a=>({...a,revoked_at:revoked.find(t=>t.assignment_id===a.id)?.revoked_at||null}));
+      result.exam_assignments=(await tx.query('select * from public.training_exam_assignments')).rows.map(a=>({...a,program_version_id:issuances.find(i=>i.assignment_id===a.id)?.program_version_id||null,revoked_at:revoked.find(t=>t.assignment_id===a.id)?.revoked_at||null}));
       result.exam_attempts=(await tx.query('select * from public.training_exam_attempts')).rows;
       result.progress=[];
       for(const e of result.enrollments) result.progress.push(await currentProgress(tx,e));

@@ -8,3 +8,5 @@
 .quiz-shell{max-width:850px;margin:auto;padding:40px 24px}.quiz-question{min-width:0}.quiz-question legend{font-size:15px;font-weight:700;padding:0 8px;max-width:100%;overflow-wrap:anywhere}.quiz-option{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#f7f8fc;border-radius:9px;line-height:1.6}.quiz-option input{width:18px;height:18px;flex:none;accent-color:var(--purple);margin:2px 0}.quiz-shell .stat{margin:18px 0}.quiz-shell .panel{margin-top:24px}#exam-invitation a{display:inline-block;text-decoration:none}@media(max-width:700px){.quiz-shell{padding:24px 16px}}
 
 .exam-question{border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}.exam-question summary{overflow-wrap:anywhere;font-size:12px}.exam-question .form-grid{align-items:start}
+
+.closing-record h2{margin-top:16px}.closing-record p{overflow-wrap:anywhere;white-space:pre-wrap}

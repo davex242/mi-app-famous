@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.5
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir persistencia local: **280 pruebas de SQL/API y 38 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir cierre administrativo: **303 pruebas de SQL/API y 44 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -39,13 +39,13 @@ Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO
 
 ## Vista de prueba
 
-La interfaz en `web/` usa HTML, CSS y JavaScript sin dependencias de frontend, fuentes remotas ni CDN. Todas las peticiones van a rutas relativas de esta misma API local. El servidor entrega únicamente ocho archivos de la interfaz mediante una lista cerrada de rutas; no permite descargar el código de servidor, las credenciales ni archivos arbitrarios. CSP limita recursos y conexiones al mismo origen. El token vive solo en memoria: recargar la página exige iniciar sesión otra vez.
+La interfaz en `web/` usa HTML, CSS y JavaScript sin dependencias de frontend, fuentes remotas ni CDN. Todas las peticiones van a rutas relativas de esta misma API local. El servidor entrega únicamente nueve archivos de la interfaz mediante una lista cerrada de rutas; no permite descargar el código de servidor, las credenciales ni archivos arbitrarios. CSP limita recursos y conexiones al mismo origen. El token vive solo en memoria: recargar la página exige iniciar sesión otra vez.
 
-Vistas: Resumen, Programas, Agenda, Evidencias, Biblioteca, Actualizaciones, Quiz final e Historial. Los administradores tienen formularios de revisión, evaluación, validación, constructor de programas y gestión/publicación del catálogo; el reclutador trabaja con sus emisores y contenido publicado; readonly consulta su alcance sin formularios de escritura. La autorización final permanece en el servidor. El programa inicial es DEMO; el catálogo admite contenido manual en este entorno temporal. No hay acciones de publicación o descarga ficticias. Los mensajes confirman exclusivamente guardado temporal real.
+Vistas: Resumen, Programas, Agenda, Evidencias, Biblioteca, Actualizaciones, Quiz final, Cierre e Historial. Los administradores tienen formularios de revisión, evaluación, validación, constructor de programas y gestión/publicación del catálogo; el reclutador trabaja con sus emisores y contenido publicado; readonly consulta su alcance sin formularios de escritura. La autorización final permanece en el servidor. El programa inicial es DEMO; el catálogo admite contenido manual en este entorno temporal. No hay acciones de publicación o descarga ficticias. Los mensajes confirman exclusivamente guardado temporal real.
 
 Para ensayar visualmente: entra como Reclutador con la contraseña de demo-edit, inscribe el emisor y agrega una sesión en Agenda; después envía su práctica desde Evidencias. Cierra sesión y entra como Superadmin o Subadmin para revisar la práctica, guardar una evaluación y validarla. Historial conserva revisiones y notas durante la ejecución del servidor. Solo lectura no tiene emisor asignado al arrancar; el test de navegador asigna un emisor ficticio para verificar esa vista.
 
-Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png), [catálogo de materiales](preview/training-library.png), [constructor de programas](preview/training-programs.png), [agenda](preview/training-agenda.png), [actualización opcional](preview/training-updates.png), [resultados del quiz](preview/training-exams.png), [quiz móvil](preview/training-quiz-mobile.png) y [persistencia local](preview/training-persistent.png). No son una URL pública del sitio.
+Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png), [catálogo de materiales](preview/training-library.png), [constructor de programas](preview/training-programs.png), [agenda](preview/training-agenda.png), [actualización opcional](preview/training-updates.png), [resultados del quiz](preview/training-exams.png), [quiz móvil](preview/training-quiz-mobile.png) [persistencia local](preview/training-persistent.png) y [revisión del cierre](preview/training-closing-review.png). No son una URL pública del sitio.
 
 Para repetir las pruebas de navegador:
 
@@ -165,7 +165,7 @@ El visitante no necesita una cuenta del personal. El enlace es una credencial de
 
 Start retoma el intento abierto sin duplicarlo; al enviar deben venir exactamente 50 IDs de preguntas únicos de esa versión con índices válidos. Se rechazan score, passed, host_id y campos ajenos. El servidor corrige con claves privadas; cada acierto vale 2 puntos. Un envío repetido con las mismas respuestas devuelve el resultado original sin duplicar respuestas/auditoría; cambiarlas después se rechaza. Aprobar o agotar los intentos finaliza esa invitación. Una nueva invitación posterior requiere una acción explícita del personal y conserva todo el historial anterior. No se muestran claves ni aciertos por pregunta al visitante.
 
-Revocar o vencer el enlace bloquea status/start/submit incluso con un intento abierto. Pausar/cancelar/completar la inscripción bloquea el acceso público; los resultados históricos siguen visibles al personal. Revocar no borra preguntas, intentos o resultados. Aprobar el quiz no cambia automáticamente la inscripción a completada ni sustituye las prácticas. La finalización integral y constancias continúan pendientes.
+Revocar o vencer el enlace bloquea status/start/submit incluso con un intento abierto. Pausar/cancelar/completar la inscripción bloquea el acceso público; los resultados históricos siguen visibles al personal. Revocar no borra preguntas, intentos o resultados. Aprobar el quiz no cambia automáticamente la inscripción a completada ni sustituye las prácticas. La finalización ahora requiere confirmación administrativa mediante la vista Cierre; las constancias formales siguen pendientes.
 
 | Ruta POST | Campos | Autorización |
 |---|---|---|
@@ -178,6 +178,25 @@ Revocar o vencer el enlace bloquea status/start/submit incluso con un intento ab
 | /api/quiz/submit | attempt_id, answers [{question_id,selected_option}] | Misma invitación; corrección privada |
 
 Todas las peticiones de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
+
+## Cierre administrativo del entrenamiento
+
+La vista Cierre permite revisar requisitos sin modificar datos. Superadmin/subadmin pueden confirmar el cierre únicamente cuando la inscripción está activa, el programa publicado contiene prácticas y todos los requisitos vigentes están cumplidos. El reclutador asignado y readonly pueden revisar y consultar el registro dentro de su alcance actual; no pueden confirmar. El servidor revalida identidad, rol y asignación en cada llamada.
+
+Cada práctica exige su validación, una sesión completada del requisito vigente o su equivalente conservado, evidencia aprobada cuando es obligatoria y la última evaluación aprobada del tema cuando corresponde. Un porcentaje de 100% por sí solo no autoriza el cierre. El quiz seleccionado debe pertenecer al mismo emisor e inscripción y haber sido emitido para la versión actual del programa. El servidor vuelve a comprobar las 50 respuestas y claves privadas, recalcula la puntuación y verifica el umbral; no devuelve respuestas ni claves al navegador.
+
+La emisión del quiz registra ahora program_version_id en su auditoría. Los quizzes anteriores sin ese vínculo, o emitidos antes de aceptar otra versión, conservan sus resultados históricos pero requieren una nueva invitación de la versión vigente para cerrar. No se deduce una versión ni se migra el esquema. Vencer o revocar una invitación bloquea su acceso público; no invalida un resultado ya corregido y aprobado. El enlace sigue siendo una credencial de portador, sin verificación de quién respondió.
+
+Confirmar exige conclusión/plan de mejora, versión esperada y hash de la revisión. El servidor vuelve a revisar todo bajo bloqueo de la inscripción y rechaza cambios posteriores a la propuesta. La confirmación es transaccional y el reenvío idéntico es idempotente. Otro texto o selección después del cierre se rechaza. Se conserva un registro en training_events con actor, fecha, conclusión, versión, requisitos y referencias verificadas, puntuación y umbral. El workspace expone exclusivamente los registros de cierre autorizados en closing_records; las políticas generales de events permanecen administrativas.
+
+El registro no puede editarse mediante la API. Completar bloquea nuevas mutaciones, actualizaciones de programa y acceso público al quiz de esa inscripción. Publicar versiones futuras o crear otra inscripción no altera el cierre anterior. Se probó conservar el registro exacto tras cerrar/reabrir el almacén local. Es un registro administrativo del sandbox; no genera certificado, PDF ni acreditación oficial.
+
+| Ruta POST | Cuerpo | Permiso |
+|---|---|---|
+| /api/training/closing-preview | enrollment_id; attempt_id opcional | Personal autenticado dentro de su alcance; sin escrituras |
+| /api/training/complete | enrollment_id, attempt_id, expected_program_version_id, preview_hash, notes | Administrador; confirmación explícita |
+
+Las pruebas cubren prácticas incompletas, evaluación posterior reprobada, puntuación falsificada, respuestas privadas faltantes, quiz de otra inscripción/versión, propuesta obsoleta, pausa, concurrencia e idempotencia, alcance tras reasignación, conservación histórica, reinicio local y revisión en escritorio/móvil. PGlite serializa las operaciones; estas pruebas no demuestran concurrencia distribuida con múltiples conexiones.
 
 ## Persistencia local independiente (opcional)
 
@@ -231,7 +250,7 @@ El almacenamiento local depende del disco y de ese entorno: no es persistencia c
 
 `bootstrap.sql` representa únicamente las claves UUID necesarias para el ensayo, no el esquema real de DatabasePad. `auth.uid()` se simula con un claim de sesión para probar RLS; no verifica tokens ni prueba el login. La ejecución en memoria no demuestra compatibilidad completa con Supabase/DatabasePad, Auth, Storage o PostgREST.
 
-La API ya implementa validación de prácticas, catálogo de texto/enlaces, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado y quiz final con corrección privada. Aún no implementa carga de PDF, imágenes, videos o diapositivas, archivos de evidencia ni emisión de constancias/finalización integral del programa. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
+La API ya implementa validación de prácticas, catálogo de texto/enlaces, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado quiz final con corrección privada y cierre administrativo. Aún no implementa carga de PDF, imágenes, videos o diapositivas, archivos de evidencia ni emisión de constancias formales o PDF. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
 
 El primer fixture de RLS contiene una pregunta ficticia y prueba solo autorización. Los nuevos tests de publicación/corrección sí usan 50 preguntas reales del ejemplo DEMO y rechazan 49/51, claves inválidas y contenido duplicado. Los completions del primer test de RLS son fixtures de autorización; los tests HTTP, separados, sí exigen revisión y evaluación antes de completar una práctica. Faltan integración con identidad real de Supabase/DatabasePad, configuración del servicio alojado y pruebas de concurrencia en un entorno con múltiples conexiones. PGlite serializa las operaciones en una sola conexión; no se ha demostrado comportamiento distribuido.
 

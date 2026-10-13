@@ -1,6 +1,7 @@
 import { createProgramUI } from './programs-ui.mjs';
 import { createUpdatesUI } from './updates-ui.mjs';
 import { createExamsUI } from './exams-ui.mjs';
+import {createClosingUI} from './closing-ui.mjs';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
@@ -9,6 +10,9 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Closing requirements changed; review again':'Los requisitos cambiaron. Revisa el cierre otra vez antes de confirmar.',
+  'Training requirements are incomplete':'Todavía hay requisitos pendientes; no se cerró el entrenamiento.',
+  'Training is already closed; its record cannot change':'Este entrenamiento ya fue cerrado y su registro se conserva sin cambios.',
   'Exactly 50 questions required':'El examen debe contener exactamente 50 preguntas.',
   'Explicit approval threshold required':'Indica un porcentaje de aprobación mayor que 0 y hasta 100, con máximo dos decimales.',
   'Invalid options':'Cada pregunta necesita de 2 a 6 opciones de texto.',
@@ -69,6 +73,7 @@ const date = value => value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium
 const programUI = createProgramUI({ state, zone, esc, opt, empty, pill, isAdmin, canWrite, api, action, render, notify, topic, date, enrollLabel });
 const updatesUI = createUpdatesUI({state,esc,opt,empty,isAdmin,canWrite,api,action,render,notify,enrollLabel,topic,date,invalidateAgenda:programUI.invalidateAgenda});
 const examsUI=createExamsUI({state,esc,opt,empty,isAdmin,canWrite,api,action,notify,render,enrollLabel,date});
+const closingUI=createClosingUI({state,esc,opt,empty,isAdmin,api,action,render,notify,enrollLabel,topic,date});
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.className = error ? 'error' : ''; node.hidden = false;
 }
@@ -78,6 +83,7 @@ function exitSession() {
   programUI.reset();
   updatesUI.reset();
   examsUI.reset();
+  closingUI.reset();
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -109,7 +115,7 @@ function render() {
     ['Prácticas validadas', w.progress.reduce((n,p)=>n+p.completed_items,0), 'Validaciones de la versión asignada'],
   ].map(([name, count, note]) => `<article class="stat"><label>${name}</label><strong>${count}</strong><small>${note}</small></article>`).join('');
   document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === state.tab));
-  const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, exams:examsUI.renderExams, agenda, evidence, library, history };
+  const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, exams:examsUI.renderExams, closing:closingUI.renderClosing, agenda, evidence, library, history };
   $('#content').innerHTML = (state.actor.role === 'readonly' ? '<div class="readonly-note">Acceso de solo lectura: puedes consultar tu información asignada.</div>' : '') + views[state.tab]();
 }
 function overview() {
@@ -208,6 +214,7 @@ $('#logout-button').addEventListener('click', async () => {
 });
 $('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
+  closingUI.handleChange(event);
   examsUI.handleChange(event);
   updatesUI.handleChange(event);
   programUI.handleChange(event);
@@ -225,6 +232,7 @@ $('#content').addEventListener('change', event => {
 });
 $('#content').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
+  if (await closingUI.handleSubmit(form,data)) return;
   if (await examsUI.handleSubmit(form,data)) return;
   if (await updatesUI.handleSubmit(form,data)) return;
   if (await programUI.handleSubmit(form,data)) return;

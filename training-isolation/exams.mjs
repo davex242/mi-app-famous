@@ -66,7 +66,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
         values($1,$2,$3,'issued',$4,$5,$6) returning *`,[v.id,e.host_id,e.id,body.expires_at,actor.app_user_id,body.max_attempts])).rows[0];
       const invitation=randomBytes(32).toString('base64url');
       await tx.query('insert into training_private.training_exam_tokens(assignment_id,token_hash) values($1,$2)',[a.id,hash(invitation)]);
-      await audit(tx,actor,'exam_issued','exam_assignment',a.id,e.id,{exam_version_id:v.id,max_attempts:body.max_attempts});
+      await audit(tx,actor,'exam_issued','exam_assignment',a.id,e.id,{exam_version_id:v.id,program_version_id:e.program_version_id,max_attempts:body.max_attempts});
       return {assignment:a,invitation_token:invitation};
     }),
     revokeExam:(token,body)=>run(token,async(tx,actor)=>{
