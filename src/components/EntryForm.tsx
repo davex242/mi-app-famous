@@ -558,11 +558,13 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
 
       {/* Capturas de Imágenes */}
       <div className="bg-gray-50 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Capturas <span className="text-red-500">*</span></h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Capturas</h3>
+        <p className="text-sm text-gray-500 mb-4">La captura del método de pago es opcional. Las otras tres capturas son obligatorias.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <ImageUpload
-              label="Método de Pago"
+              label="Método de Pago (opcional)"
+              required={false}
               value={formData.captura}
               onChange={(url) => handleChange('captura', url)}
               disabled={isFormDisabled}
