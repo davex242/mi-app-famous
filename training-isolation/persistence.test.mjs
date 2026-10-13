@@ -7,10 +7,11 @@ import { openPersistentSandbox,backupLocalSandbox,restoreLocalSandbox,LOCAL_DATA
 import { preparePersistentDemo,startPersistentSandbox } from './local-runtime.mjs';
 import { createTrainingService } from './service.mjs';
 import { examTemplate } from './exam-template.mjs';
+import {imageFixture} from './image-fixtures.mjs';
 
 test('local persistence: restart, isolation, exclusive ownership and backup to a new copy',async t=>{
  const store='qa-'+randomUUID(),copy='qa-'+randomUUID(),foreign='qa-'+randomUUID(),link='qa-'+randomUUID(),badTarget='qa-'+randomUUID();
- const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease;
+ const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore;
  const password='Only-synthetic-persistent-password';
  t.afterEach(()=>globalThis.gc?.());
  try{
@@ -46,6 +47,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    await service.acceptUpdate(tokens.edit,{enrollment_id:e.id,to_version_id:next.id,expected_from_version_id:fixture.demo.program_version_id,preview_hash:preview.preview_hash});
    const topic=await service.saveTopic(tokens.superadmin,{title:'DEMO durable guide',description:'DEMO guide',category:'DEMO',estimated_minutes:10});await service.publishTopic(tokens.superadmin,{id:topic.id});
    saved=await service.saveMaterial(tokens.superadmin,{title:'DEMO durable document',topic_id:topic.id,kind:'document',content:'DEMO content persists after restart',allow_preview:true,allow_download:true});await service.publishMaterial(tokens.superadmin,{id:saved.id});
+   pngMaterial=await service.saveImageMaterial(tokens.superadmin,{title:'DEMO durable image',topic_id:topic.id,image_base64:imageFixture().toString('base64'),allow_preview:true,allow_download:true});await service.publishMaterial(tokens.superadmin,{id:pngMaterial.id});pngBefore=await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id});
    const v=await service.publishExam(tokens.superadmin,{exam_key:'DEMO persistent exam',pass_percent:80,questions:examTemplate()});
    issued=await service.issueExam(tokens.edit,{enrollment_id:e.id,exam_version_id:v.id,max_attempts:2,expires_at:new Date(Date.now()+86400000).toISOString()});
    const attempt=await service.startExam(issued.invitation_token,{});
@@ -62,6 +64,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    // This exact lease was positively closed in this process; recovery is safe.
    local=await openPersistentSandbox(store);service=createTrainingService(local.db);
    assert.equal(JSON.stringify(await service.workspace(tokens.superadmin)),original);
+   assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id}),pngBefore);
    const w=await service.workspace(tokens.superadmin);assert.equal(w.update_history.length,1);assert.equal(w.progress[0].completed_items,1);assert.equal(w.progress[0].total_items,15);
    assert.equal((await service.previewMaterial(tokens.edit,{id:saved.id})).content,'DEMO content persists after restart');
    assert.equal((await service.examStatus(issued.invitation_token,{})).attempts[0].attempt_id,completed.attempt_id);

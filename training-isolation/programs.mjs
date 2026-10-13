@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import {loadPrivateImage} from './private-images.mjs';
 import { effectiveItemId, updateHistory } from './updates.mjs';
 
 export async function ensureNoSessionOverlap(tx, enrollmentId, start, duration, ignored, fail) {
@@ -133,6 +134,7 @@ export function createProgramOperations(run, { fields, text, uuid, fail, require
       for (const material of materials.filter(m => m.kind === 'document')) {
         if (!(await tx.query('select material_id from training_private.local_material_content where material_id=$1', [material.id])).rows.length) fail(409, 'Material content unavailable');
       }
+      for(const material of materials.filter(m=>m.kind==='image'))await loadPrivateImage(tx,material.id,fail);
       const result = (await tx.query("update public.training_program_versions set status='published',published_by=$2,published_at=now() where id=$1 returning *", [program.id, actor.app_user_id])).rows[0];
       await tx.query(`insert into public.training_approvals(program_version_id,status,requested_by,reviewed_by,reviewed_at,review_notes)
         values($1,'approved',$2,$2,now(),'Publicación administrativa del programa')`, [program.id, actor.app_user_id]);

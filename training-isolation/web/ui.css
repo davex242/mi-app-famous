@@ -10,3 +10,5 @@
 .exam-question{border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}.exam-question summary{overflow-wrap:anywhere;font-size:12px}.exam-question .form-grid{align-items:start}
 
 .closing-record h2{margin-top:16px}.closing-record p{overflow-wrap:anywhere;white-space:pre-wrap}
+
+#preview-image{display:block;max-width:100%;height:auto;max-height:70vh;object-fit:contain;margin:18px auto}#preview-image[hidden]{display:none}

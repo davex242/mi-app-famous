@@ -6,11 +6,23 @@ import { createIsolatedDatabase } from './database.mjs';
 import { createTrainingService, provisionSyntheticUser, ApiError } from './service.mjs';
 import { seedDemoProgram } from './demo-fixtures.mjs';
 
+function requestBody(req,maxBytes){
+  return new Promise((resolve,reject)=>{
+    let size=0;const chunks=[];
+    const clean=()=>{req.off('data',data);req.off('end',end);req.off('error',error);req.off('aborted',abort);};
+    const error=e=>{clean();reject(e);},abort=()=>error(new ApiError(400,'Invalid JSON'));
+    const end=()=>{clean();resolve(Buffer.concat(chunks,size).toString('utf8'));};
+    const data=chunk=>{size+=chunk.length;if(size>maxBytes){clean();chunks.length=0;req.once('error',()=>{});req.resume();reject(new ApiError(413,'Body too large'));}else chunks.push(chunk);};
+    req.on('data',data);req.once('end',end);req.once('error',error);req.once('aborted',abort);
+  });
+}
+
 export function createSandboxHttpServer(service,{storage='memory'}={}) {
   if(!['memory','local-persistent'].includes(storage))throw Error('Invalid sandbox storage mode');
   const limits = new Map();
   const server = createServer(async (req, res) => {
     const send = (status, body) => {
+      if(status===413)res.setHeader('connection','close');
       res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(JSON.stringify(body));
     };
@@ -61,7 +73,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
         '/api/sessions': 'schedule', '/api/evidence': 'submitEvidence',
         '/api/evidence/review': 'reviewEvidence', '/api/assessments': 'assess', '/api/items/complete': 'completeItem',
         '/api/topics': 'saveTopic', '/api/topics/publish': 'publishTopic',
-        '/api/materials': 'saveMaterial', '/api/materials/publish': 'publishMaterial',
+        '/api/materials': 'saveMaterial', '/api/materials/image':'saveImageMaterial', '/api/materials/publish': 'publishMaterial',
         '/api/materials/edit-data': 'materialEditData', '/api/materials/preview': 'previewMaterial',
         '/api/materials/download': 'downloadMaterial',
         '/api/programs': 'saveProgram', '/api/programs/publish': 'publishProgram',
@@ -72,11 +84,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
       if (!routes[path]) throw new ApiError(404, 'Endpoint unavailable');
       if (req.method !== 'POST') throw new ApiError(405, 'Method unavailable');
       if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new ApiError(415, 'JSON required');
-      let raw = '';
-      for await (const chunk of req) {
-        raw += chunk;
-        if (Buffer.byteLength(raw) > 32768) throw new ApiError(413, 'Body too large');
-      }
+      const raw=await requestBody(req,path==='/api/materials/image'?Math.ceil(2*1024*1024/3)*4+8192:32768);
       let body;
       try { body = JSON.parse(raw); } catch { throw new ApiError(400, 'Invalid JSON'); }
       const result = path === '/api/login' ? await service.login(body) : await service[routes[path]](token, body);

@@ -10,6 +10,10 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Valid RGB or RGBA PNG required':'Usa una imagen PNG RGB o RGBA de 8 bits, sin animación ni entrelazado.',
+  'PNG exceeds 2 MiB limit':'La imagen PNG debe pesar como máximo 2 MiB.',
+  'PNG dimensions exceed sandbox limit':'La imagen admite hasta 2048 píxeles por lado y 4 millones de píxeles en total.',
+  'Private image content unavailable':'No se pudo verificar el archivo privado de esta imagen.',
   'Choose HTML or JSON report':'Selecciona informe HTML o registro JSON.',
   'Closing record is inconsistent':'Este registro necesita revisión administrativa antes de exportarse.',
   'Closing requirements changed; review again':'Los requisitos cambiaron. Revisa el cierre otra vez antes de confirmar.',
@@ -86,6 +90,7 @@ function exitSession() {
   updatesUI.reset();
   examsUI.reset();
   closingUI.reset();
+  $('#content').querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());$('#content').replaceChildren();
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -171,8 +176,8 @@ function library() {
     const current = latest(all).some(row => row.id === value.id);
     const edit = isAdmin() ? `<button class="secondary" data-edit-${materials ? 'material' : 'topic'}="${esc(value.id)}" ${!current ? 'disabled' : ''}>Nueva revisión</button>` : '';
     const publish = isAdmin() && value.status === 'draft' && current ? `<button class="primary" data-publish-${materials ? 'material' : 'topic'}="${esc(value.id)}">Publicar</button>` : '';
-    const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || value.kind !== 'document' ? 'disabled' : ''}>Descargar</button>` : '';
-    const detail = materials ? `${value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
+    const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || !['document','image'].includes(value.kind) ? 'disabled' : ''}>Descargar</button>` : '';
+    const detail = materials ? `${value.kind === 'image'?'Imagen PNG':value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
     return `<article class="catalogue-card"><div class="catalogue-card-head"><div><h3>${esc(value.title)}</h3><p class="caption">${esc(detail)} · Revisión ${value.revision}</p></div>${pill(value.status)}</div>${!materials && value.description ? `<p class="caption">${esc(value.description)}</p>` : ''}<div class="actions">${access}${edit}${publish}</div></article>`;
   }).join('');
   let form = '';
@@ -183,9 +188,9 @@ function library() {
     const value = state.editMaterial;
     const topics = w.topics.filter(t => ['draft', 'published'].includes(t.status));
     const options = topics.map(t => `<option value="${esc(t.id)}" ${value?.topic_id === t.id ? 'selected' : ''}>${esc(t.title)} · r${t.revision} · ${esc(statuses[t.status])}</option>`).join('');
-    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Los documentos se descargan como archivo de texto.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${value?.kind !== 'link' ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option></select></label><label id="material-text-field" ${value?.kind === 'link' ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${value?.kind !== 'link' ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false ? 'checked' : ''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
+    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Se admiten texto, enlaces HTTPS e imágenes PNG privadas.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${!value||value.kind==='document' ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option><option value="image" ${value?.kind==='image'?'selected':''}>Imagen PNG privada</option></select></label><label id="material-text-field" ${value&&value.kind!=='document' ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${!value||value.kind==='document' ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label id="material-image-field" ${value?.kind!=='image'?'hidden':''}>Imagen PNG<input name="image_file" type="file" accept="image/png,.png" ${value?.kind==='image'&&!value?.image?'required':''}><small>Máximo 2 MiB, 2048 píxeles por lado y 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. Se eliminan los metadatos.${value?.image?' Puedes conservar la imagen actual o elegir otra para esta revisión.':''}</small></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false ? 'checked' : ''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
   }
-  return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
+  return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><img id="preview-image" alt="Material de entrenamiento" hidden><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
 }
 function history() {
   const w = state.workspace;
@@ -214,6 +219,7 @@ $('#refresh-button').addEventListener('click', async () => { try { await refresh
 $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
+$('#content').addEventListener('close',event=>{if(event.target.id==='material-preview')$('#preview-image')?.removeAttribute('src');},true);
 $('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
   closingUI.handleChange(event);
@@ -226,9 +232,10 @@ $('#content').addEventListener('change', event => {
   }
   if (event.target.id === 'catalogue-history') { state.catalogueHistory = event.target.checked; render(); }
   if (event.target.matches('#material-form [name="kind"]')) {
-    const link = event.target.value === 'link';
-    $('#material-text-field').hidden = link; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;
-    $('#material-form [name="content"]').required = !link; $('#material-form [name="external_url"]').required = link;
+    const link = event.target.value === 'link',image=event.target.value==='image';
+    $('#material-text-field').hidden = link||image; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;$('#material-image-field').hidden=!image;
+    $('#material-form [name="image_file"]').required=image&&!state.editMaterial?.image;
+    $('#material-form [name="content"]').required = !link&&!image; $('#material-form [name="external_url"]').required = link;
     $('#material-form [name="allow_download"]').checked = !link;
   }
 });
@@ -253,7 +260,16 @@ $('#content').addEventListener('submit', async event => {
     const body = { title: data.title, topic_id: data.topic_id, kind: data.kind, allow_preview: form.elements.allow_preview.checked,
       allow_download: !link && form.elements.allow_download.checked, ...(link ? { external_url: data.external_url } : { content: data.content }),
       ...(state.editMaterial ? { source_id: state.editMaterial.id } : {}) };
-    action('/api/materials', body, 'Borrador de material creado.', () => { state.editMaterial = null; });
+    if(data.kind==='image'){
+      if(state.busy)return;state.busy=true;const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const file=form.elements.image_file.files[0];let image_base64=state.editMaterial?.image?.data;
+        if(file){if(file.size>2*1024*1024)throw Error(errors['PNG exceeds 2 MiB limit']);const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));image_base64=btoa(binary);}
+        if(!image_base64)throw Error('Selecciona una imagen PNG.');
+        const {kind,content,...imageBody}=body;state.busy=false;
+        action('/api/materials/image',{...imageBody,image_base64},'Borrador de imagen creado.',()=>{state.editMaterial=null;});
+      }catch(e){state.busy=false;button.disabled=false;notify(e.message,true);}
+    }else action('/api/materials', body, 'Borrador de material creado.', () => { state.editMaterial = null; });
   }
 });
 $('#content').addEventListener('click', async event => {
@@ -270,7 +286,7 @@ $('#content').addEventListener('click', async event => {
   if (button.dataset.editTopic) { state.editTopic = state.workspace.topics.find(t => t.id === button.dataset.editTopic); render(); $('#topic-form input').focus(); }
   if (button.dataset.publishTopic) action('/api/topics/publish', { id: button.dataset.publishTopic }, 'Tema publicado.');
   if (button.dataset.publishMaterial) action('/api/materials/publish', { id: button.dataset.publishMaterial }, 'Material publicado.');
-  if (button.hasAttribute('data-close-preview')) $('#material-preview').close();
+  if (button.hasAttribute('data-close-preview')) {$('#preview-image').removeAttribute('src');$('#material-preview').close();}
   if (button.dataset.editMaterial || button.dataset.previewMaterial || button.dataset.downloadMaterial) {
     state.busy = true;
     try {
@@ -280,14 +296,15 @@ $('#content').addEventListener('click', async event => {
         const result = await api('/api/materials/preview', { id: button.dataset.previewMaterial });
         $('#preview-title').textContent = `${result.title} · Revisión ${result.revision}`;
         $('#preview-text').hidden = result.type !== 'text'; $('#preview-link').hidden = result.type !== 'link';
+        $('#preview-image').hidden=result.type!=='image';$('#preview-image').removeAttribute('src');if(result.type==='image')$('#preview-image').src='data:image/png;base64,'+result.image.data;
         $('#preview-text').textContent = result.content || ''; $('#preview-link-anchor').removeAttribute('href');
         if (result.type === 'link') $('#preview-link-anchor').href = result.url;
         $('#material-preview').showModal();
       } else {
         const result = await api('/api/materials/download', { id: button.dataset.downloadMaterial });
-        const url = URL.createObjectURL(new Blob([result.content], { type: result.mime }));
+        const url = URL.createObjectURL(new Blob([result.image_base64?Uint8Array.from(atob(result.image_base64),c=>c.charCodeAt(0)):result.content], { type: result.mime }));
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename; anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000); notify('Descarga del documento de texto iniciada.');
+        setTimeout(() => URL.revokeObjectURL(url), 1000); notify(result.image_base64?'Descarga de la imagen PNG iniciada.':'Descarga del documento de texto iniciada.');
       }
     } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
     finally { state.busy = false; }
