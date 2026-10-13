@@ -63,11 +63,11 @@ test('private PNG materials: strict raster validation, revisions, permissions an
    await db.query('update training_private.local_material_content set body=$2 where material_id=$1',[image.id,'{}']);await assert.rejects(()=>service.publishProgram(tokens.superadmin,{id:program.id}),e=>e.status===409);await assert.rejects(()=>service.downloadMaterial(tokens.readonly,{id:image.id}),e=>e.status===409);
    await db.query('update training_private.local_material_content set body=$2 where material_id=$1',[image.id,before]);await service.publishProgram(tokens.superadmin,{id:program.id});assert.equal((await db.query('select material_id from public.training_program_materials')).rows[0].material_id,image.id);
   });
-  await t.test('image upload alone accepts a valid binary file larger than the ordinary 32 KB body limit',async()=>{
+  await t.test('image upload accepts a valid binary file larger than the ordinary 32 KB body limit',async()=>{
    const raw=randomBytes((128*4+1)*128);for(let row=0;row<128;row++)raw[row*(128*4+1)]=0;
    const bytes=imageFixture({width:128,height:128,raw});assert.ok(bytes.length>32768);
    assert.equal((await call(body({image_base64:bytes.toString('base64')}))).status,200);
-   assert.equal((await call({description:'x'.repeat(33000)},'superadmin','/api/evidence')).status,413);
+   assert.equal((await call({description:'x'.repeat(33000)},'superadmin','/api/sessions')).status,413);
   });
   await t.test('normalized image is private under SQL grants; deactivated staff immediately lose access',async()=>{
    await assert.rejects(()=>db.transaction(async tx=>{await tx.exec('set local role authenticated');await tx.query('select body from training_private.local_material_content');}),e=>e.code==='42501');

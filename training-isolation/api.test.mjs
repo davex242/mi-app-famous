@@ -170,7 +170,7 @@ test('isolated HTTP API: sessions, scope and practical validation', async t => {
       assert.ok(!JSON.stringify(result.body).includes('token_hash'));
     });
     await t.test('large JSON and cross-site Host header are rejected', async () => {
-      assert.equal((await request('/api/evidence', { description: 'x'.repeat(33000) }, tokens.sub)).status, 413);
+      assert.equal((await request('/api/sessions', { description: 'x'.repeat(33000) }, tokens.sub)).status, 413);
       // Node fetch normalizes Host; use raw HTTP to actually exercise a forged header.
       const status = await new Promise((resolve, reject) => {
         const req = httpRequest(url + '/api/me', { headers: { host: 'external.example', authorization: `Bearer ${tokens.sub}` } }, res => {

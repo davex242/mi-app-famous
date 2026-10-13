@@ -11,6 +11,8 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Evidence file consent required':'Confirma que tienes autorización para adjuntar esta evidencia y el consentimiento de terceros, si aparecen.',
+  'Private evidence content unavailable':'No se pudo verificar el archivo de evidencia. No se aprobó ni validó la práctica.',
   'Compatible MP4 H264 with optional AAC required':'Usa un MP4 progresivo compatible con H.264 y audio AAC opcional, sin pistas externas ni fragmentación.',
   'Video exceeds 2 MiB limit':'El video debe pesar como máximo 2 MiB.',
   'Video duration exceeds 60 seconds':'El clip debe durar como máximo 60 segundos.',
@@ -98,7 +100,9 @@ function clearMaterialVideo(){
   const video=$('#preview-video');if(video){video.onerror=null;video.pause();video.removeAttribute('src');video.load();}
   if(materialVideoURL){URL.revokeObjectURL(materialVideoURL);materialVideoURL=null;}
 }
+function clearEvidenceImage(){ $('#evidence-preview-image')?.removeAttribute('src'); }
 function exitSession() {
+  clearEvidenceImage();
   clearMaterialVideo();
   state.token = null; state.actor = null; state.workspace = null;
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
@@ -127,6 +131,7 @@ async function refresh() {
   render();
 }
 function render() {
+  clearEvidenceImage();
   clearMaterialVideo();
   const w = state.workspace;
   $('#role-label').textContent = labels[state.actor.role];
@@ -174,14 +179,15 @@ function itemOptions(enrollmentId) {
 function evidence() {
   const w = state.workspace;
   const sessions = w.sessions.filter(s => w.enrollments.some(e => e.id === s.enrollment_id && e.status === 'active'));
-  const submit = canWrite() ? `<section class="panel"><h2>Envía una práctica</h2><p>Describe lo que realizó el emisor. En esta prueba se admite texto; la carga de archivos se habilitará más adelante.</p><form id="evidence-form"><label>Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Descripción de la práctica<textarea name="description" maxlength="2000" required placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…"></textarea></label><button class="primary" type="submit" ${!sessions.length ? 'disabled' : ''}>Enviar a revisión →</button></form></section>` : '';
+  const submit = canWrite() ? `<section class="panel"><h2>Envía una práctica</h2><p>Describe lo que realizó el emisor y, si lo necesitas, adjunta una imagen privada. Solo el personal con acceso actual a este emisor puede verla o descargarla.</p><form id="evidence-form"><label>Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Descripción de la práctica<textarea name="description" maxlength="2000" required placeholder="Qué se hizo, qué se aprendió y qué queda por mejorar…"></textarea></label><label>Imagen de evidencia (opcional)<input name="evidence_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg"><small>Máximo 2 MiB y 2048 píxeles por lado, hasta 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce proporcionalmente hasta 768 píxeles por lado. Se eliminan los metadatos y el nombre original; la descarga será PNG.</small></label><label class="check-label" id="evidence-consent-field" hidden><input name="consent_confirmed" type="checkbox"> Confirmo que tengo autorización para usar esta imagen y el consentimiento de terceros, si aparecen.</label><button class="primary" type="submit" ${!sessions.length ? 'disabled' : ''}>Enviar a revisión →</button></form></section>` : '';
   const cards = w.evidence.slice().sort((a, b) => b.submitted_at.localeCompare(a.submitted_at)).map(e => {
-    const review = isAdmin() && e.status === 'pending' ? `<form class="review-form" data-review="${esc(e.id)}"><label>Decisión<select name="decision"><option value="approved">Aprobar práctica</option><option value="rejected">Rechazar y solicitar corrección</option></select></label><label>Notas de revisión<textarea name="notes" maxlength="2000" required></textarea></label><button class="primary" type="submit">Registrar revisión</button></form>` : '';
+    const review = isAdmin() && e.status === 'pending' && w.enrollments.some(n=>n.id===e.enrollment_id&&n.status==='active') ? `<form class="review-form" data-review="${esc(e.id)}"><label>Decisión<select name="decision"><option value="approved">Aprobar práctica</option><option value="rejected">Rechazar y solicitar corrección</option></select></label><label>Notas de revisión<textarea name="notes" maxlength="2000" required></textarea></label><button class="primary" type="submit">Registrar revisión</button></form>` : '';
+    const enrollment=w.enrollments.find(n=>n.id===e.enrollment_id);
     const approval = w.approvals.find(a => a.evidence_id === e.id);
-    return `<article class="evidence-card">${pill(e.status)}<h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${review}</article>`;
+    return `<article class="evidence-card">${pill(e.status)}<small>${esc(enrollment?enrollLabel(enrollment):'Emisor DEMO')}</small><h3>${esc(topic(e.topic_id))}</h3><p>${esc(e.description)}</p><small>${esc(date(e.submitted_at))}</small>${approval?.review_notes ? `<p><strong>Revisión:</strong> ${esc(approval.review_notes)}</p>` : ''}${e.storage_path?`<p>Imagen privada · PNG</p><div class="actions"><button class="secondary" data-preview-evidence="${esc(e.id)}">Ver evidencia</button><button class="secondary" data-download-evidence="${esc(e.id)}">Descargar evidencia</button></div>`:''}${review}</article>`;
   }).join('');
-  const assess = isAdmin() ? `<section class="panel"><h2>Evaluación y validación administrativa</h2><p>La validación exige evidencia aprobada y evaluación satisfactoria. Conservamos cada revisión.</p><form id="assessment-form" class="form-grid"><label class="wide">Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Puntuación<input name="score" type="number" min="0" max="100" step="0.01" value="90" required></label><label>Resultado<select name="passed"><option value="true">Satisfactorio</option><option value="false">Requiere mejora</option></select></label><label class="wide">Notas<textarea name="notes" maxlength="2000" required></textarea></label><div class="wide actions"><button class="secondary" type="submit" ${!sessions.length ? 'disabled' : ''}>Guardar evaluación</button><button id="complete-button" class="primary" type="button" ${!sessions.length ? 'disabled' : ''}>Validar práctica ✓</button></div></form></section>` : '';
-  return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}`;
+  const assess = isAdmin() ? `<section class="panel"><h2>Evaluación y validación administrativa</h2><p>La validación exige evidencia aprobada y evaluación satisfactoria. Conservamos cada revisión.</p><form id="assessment-form" class="form-grid"><label class="wide">Sesión<select name="session_id" required>${sessions.map(s => opt(s.id, `${enrollLabel(w.enrollments.find(e=>e.id===s.enrollment_id))} · ${topic(s.topic_id)} · ${date(s.scheduled_at)}`)).join('')}</select></label><label>Puntuación<input name="score" type="number" min="0" max="100" step="0.01" value="90" required></label><label>Resultado<select name="passed"><option value="true">Satisfactorio</option><option value="false">Requiere mejora</option></select></label><label class="wide">Notas<textarea name="notes" maxlength="2000" required></textarea></label><div class="wide actions"><button class="secondary" type="submit" ${!sessions.length ? 'disabled' : ''}>Guardar evaluación</button><button id="complete-button" class="primary" type="button" ${!sessions.length ? 'disabled' : ''}>Validar práctica ✓</button></div></form></section>` : '';
+  return `<div class="cols">${submit}<section class="panel"><h2>Evidencias y revisiones</h2>${cards ? `<div class="cards">${cards}</div>` : empty('Aún no hay evidencias', 'Las prácticas enviadas aparecerán aquí para su revisión.')}</section></div>${assess}<dialog id="evidence-preview"><div class="panel-head"><h2>Imagen de evidencia</h2><button class="secondary" data-close-evidence>Cerrar</button></div><img id="evidence-preview-image" alt="Evidencia de la práctica"></dialog>`;
 }
 function library() {
   const w = state.workspace, materials = state.catalogueMode === 'materials';
@@ -236,9 +242,10 @@ $('#refresh-button').addEventListener('click', async () => { try { await refresh
 $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
-$('#content').addEventListener('close',event=>{if(event.target.id==='material-preview'){clearMaterialVideo();$('#preview-image')?.removeAttribute('src');}},true);
+$('#content').addEventListener('close',event=>{if(event.target.id==='evidence-preview')clearEvidenceImage();if(event.target.id==='material-preview'){clearMaterialVideo();$('#preview-image')?.removeAttribute('src');}},true);
 $('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
+  if(event.target.matches('#evidence-form [name="evidence_file"]')){const attached=!!event.target.files[0];$('#evidence-consent-field').hidden=!attached;const consent=$('#evidence-form [name="consent_confirmed"]');consent.checked=false;consent.required=attached;}
   closingUI.handleChange(event);
   examsUI.handleChange(event);
   updatesUI.handleChange(event);
@@ -271,7 +278,21 @@ $('#content').addEventListener('submit', async event => {
     if (!Number.isFinite(parsed.getTime())) return notify('Selecciona una fecha y hora válidas.', true);
     action('/api/sessions', { enrollment_id: data.enrollment_id, item_id: data.item_id, scheduled_at: parsed.toISOString(), duration_minutes: Number(data.duration_minutes) }, 'Sesión programada.');
   }
-  if (form.id === 'evidence-form') action('/api/evidence', data, 'Práctica enviada para revisión.');
+  if (form.id === 'evidence-form') {
+    if(state.busy)return;
+    const body={session_id:data.session_id,description:data.description},file=form.elements.evidence_file.files[0];
+    if(!file)return action('/api/evidence',body,'Práctica enviada para revisión.');
+    if(!form.elements.consent_confirmed.checked)return notify(errors['Evidence file consent required'],true);
+    state.busy=true;const token=state.token,button=form.querySelector('button[type="submit"]');button.disabled=true;
+    try{
+      const prepared=await preparePrivateImage(file);
+      if(state.token!==token||!form.isConnected)return;
+      state.busy=false;
+      await action('/api/evidence',{...body,image_base64:prepared.base64,consent_confirmed:true},'Práctica e imagen enviadas para revisión.'+(prepared.converted?` JPEG convertido a PNG de ${prepared.width} × ${prepared.height} píxeles${prepared.resized?' con reducción proporcional':''}.`:''));
+    }catch(error){if(state.token===token)notify(error.message,true);}
+    finally{state.busy=false;if(button.isConnected)button.disabled=false;}
+    return;
+  }
   if (form.dataset.review) action('/api/evidence/review', { ...data, evidence_id: form.dataset.review }, 'Revisión registrada.');
   if (form.id === 'assessment-form') action('/api/assessments', { ...data, score: Number(data.score), passed: data.passed === 'true' }, 'Evaluación registrada.');
   if (form.id === 'topic-form') action('/api/topics', { ...data, estimated_minutes: Number(data.estimated_minutes), ...(state.editTopic ? { source_id: state.editTopic.id } : {}) }, 'Borrador de tema creado.', () => { state.editTopic = null; });
@@ -315,6 +336,21 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if(button.hasAttribute('data-close-evidence')){clearEvidenceImage();$('#evidence-preview').close();return;}
+  if(button.dataset.previewEvidence||button.dataset.downloadEvidence){
+    state.busy=true;const token=state.token;
+    try{
+      const download=!!button.dataset.downloadEvidence,evidence_id=button.dataset.downloadEvidence||button.dataset.previewEvidence;
+      const result=await api(download?'/api/evidence/file-download':'/api/evidence/file-preview',{evidence_id});
+      if(state.token!==token||!button.isConnected)return;
+      if(download){
+        const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(result.image_base64),c=>c.charCodeAt(0))],{type:'image/png'}));
+        const anchor=document.createElement('a');anchor.href=url;anchor.download=result.filename;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Descarga de la evidencia PNG iniciada.');
+      }else{clearEvidenceImage();$('#evidence-preview-image').src='data:image/png;base64,'+result.image.data;$('#evidence-preview').showModal();}
+    }catch(error){if(state.token===token)notify(error.message,true);}
+    finally{state.busy=false;}
+    return;
+  }
   if (await closingUI.handleClick(button)) return;
   if (await examsUI.handleClick(button)) return;
   if (await updatesUI.handleClick(button)) return;

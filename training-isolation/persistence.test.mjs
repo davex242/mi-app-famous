@@ -13,7 +13,7 @@ import {videoFixture} from './video-fixtures.mjs';
 
 test('local persistence: restart, isolation, exclusive ownership and backup to a new copy',async t=>{
  const store='qa-'+randomUUID(),copy='qa-'+randomUUID(),foreign='qa-'+randomUUID(),link='qa-'+randomUUID(),badTarget='qa-'+randomUUID();
- const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore,pdfMaterial,pdfBefore,videoMaterial,videoBefore;
+ const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore,pdfMaterial,pdfBefore,videoMaterial,videoBefore,evidenceImage,evidenceBefore;
  const password='Only-synthetic-persistent-password';
  t.afterEach(()=>globalThis.gc?.());
  try{
@@ -38,7 +38,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
   await t.test('real API mutations include validated practice, published text and a passing quiz',async()=>{
    e=await service.enroll(tokens.edit,{host_id:fixture.demo.host_id,program_version_id:fixture.demo.program_version_id,timezone:'America/Costa_Rica'});
    const session=await service.schedule(tokens.edit,{enrollment_id:e.id,item_id:fixture.demo.item_ids[0],scheduled_at:'2026-11-01T01:00:00Z',duration_minutes:30});
-   const evidence=await service.submitEvidence(tokens.edit,{session_id:session.id,description:'DEMO persistent practical evidence'});
+   const evidence=await service.submitEvidence(tokens.edit,{session_id:session.id,description:'DEMO persistent practical evidence',image_base64:imageFixture().toString('base64'),consent_confirmed:true});evidenceImage=evidence.id;evidenceBefore=await service.downloadEvidenceFile(tokens.superadmin,{evidence_id:evidenceImage});
    await service.reviewEvidence(tokens.superadmin,{evidence_id:evidence.id,decision:'approved',notes:'DEMO verified'});
    await service.assess(tokens.superadmin,{session_id:session.id,score:90,passed:true,notes:'DEMO practical assessment'});
    await service.completeItem(tokens.superadmin,{session_id:session.id});
@@ -68,6 +68,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    // This exact lease was positively closed in this process; recovery is safe.
    local=await openPersistentSandbox(store);service=createTrainingService(local.db);
    assert.equal(JSON.stringify(await service.workspace(tokens.superadmin)),original);
+   assert.deepEqual(await service.downloadEvidenceFile(tokens.superadmin,{evidence_id:evidenceImage}),evidenceBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id}),pngBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pdfMaterial.id}),pdfBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:videoMaterial.id}),videoBefore);
@@ -119,6 +120,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    await restoreLocalSandbox(backup.backup_id,copy);local=await openPersistentSandbox(copy);service=createTrainingService(local.db);
    await assert.rejects(()=>service.me(tokens.superadmin),e=>e.status===401);
    const newToken=(await service.login({username:'demo-superadmin',password})).token,w=await service.workspace(newToken);
+   assert.deepEqual(await service.downloadEvidenceFile(newToken,{evidence_id:evidenceImage}),evidenceBefore);
    assert.deepEqual(await service.downloadMaterial(newToken,{id:pdfMaterial.id}),pdfBefore);
    assert.deepEqual(await service.downloadMaterial(newToken,{id:videoMaterial.id}),videoBefore);
    assert.equal(w.enrollments[0].id,e.id);assert.equal(w.completions.length,2);assert.equal(w.update_history.length,1);assert.equal(w.progress[0].completed_items,1);assert.equal(w.exam_attempts[0].id,completed.attempt_id);assert.equal(w.exam_attempts[0].passed,true);

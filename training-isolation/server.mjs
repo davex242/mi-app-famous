@@ -71,6 +71,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
         '/api/quiz/status':'examStatus', '/api/quiz/start':'startExam', '/api/quiz/submit':'submitExam',
         '/api/login': 'login', '/api/logout': 'logout', '/api/enrollments': 'enroll',
         '/api/sessions': 'schedule', '/api/evidence': 'submitEvidence',
+        '/api/evidence/file-preview':'previewEvidenceFile', '/api/evidence/file-download':'downloadEvidenceFile',
         '/api/evidence/review': 'reviewEvidence', '/api/assessments': 'assess', '/api/items/complete': 'completeItem',
         '/api/topics': 'saveTopic', '/api/topics/publish': 'publishTopic',
         '/api/materials': 'saveMaterial', '/api/materials/image':'saveImageMaterial', '/api/materials/pdf':'savePDFMaterial', '/api/materials/video':'saveVideoMaterial', '/api/materials/publish': 'publishMaterial',
@@ -84,7 +85,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
       if (!routes[path]) throw new ApiError(404, 'Endpoint unavailable');
       if (req.method !== 'POST') throw new ApiError(405, 'Method unavailable');
       if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new ApiError(415, 'JSON required');
-      const raw=await requestBody(req,['/api/materials/image','/api/materials/pdf','/api/materials/video'].includes(path)?Math.ceil(2*1024*1024/3)*4+8192:32768);
+      const raw=await requestBody(req,['/api/materials/image','/api/materials/pdf','/api/materials/video','/api/evidence'].includes(path)?Math.ceil(2*1024*1024/3)*4+8192:32768);
       let body;
       try { body = JSON.parse(raw); } catch { throw new ApiError(400, 'Invalid JSON'); }
       const result = path === '/api/login' ? await service.login(body) : await service[routes[path]](token, body);
