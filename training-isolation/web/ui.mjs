@@ -1,5 +1,6 @@
 import { createProgramUI } from './programs-ui.mjs';
 import { createUpdatesUI } from './updates-ui.mjs';
+import { createExamsUI } from './exams-ui.mjs';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
@@ -7,6 +8,18 @@ const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Costa_
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Exactly 50 questions required':'El examen debe contener exactamente 50 preguntas.',
+  'Explicit approval threshold required':'Indica un porcentaje de aprobación mayor que 0 y hasta 100, con máximo dos decimales.',
+  'Invalid options':'Cada pregunta necesita de 2 a 6 opciones de texto.',
+  'Invalid answer key':'Revisa las claves y evita opciones repetidas en una pregunta.',
+  'Questions must be distinct':'Las 50 preguntas deben ser distintas.',
+  'Exam version changed; refresh first':'La versión del examen cambió. Actualiza antes de publicar.',
+  'Explicit attempt limit required':'Indica entre 1 y 10 intentos permitidos.',
+  'Future expiry within 30 days required':'El vencimiento debe ser futuro y dentro de los próximos 30 días.',
+  'Published exam required':'Selecciona un examen publicado.',
+  'An invitation is already active':'Este entrenamiento ya tiene una invitación vigente. Puedes revocarla antes de emitir otra.',
+  'Exam content is inconsistent':'El examen tiene contenido incompleto. Solicita una revisión administrativa.',
+  'Invalid text':'Completa los textos requeridos y revisa su longitud.',
   'Invalid credentials': 'La cuenta o la contraseña temporal no coinciden.',
   'Authentication required': 'La sesión venció o fue revocada. Inicia sesión otra vez.',
   'Record unavailable': 'No tienes acceso a ese registro o ya no está disponible.',
@@ -54,6 +67,7 @@ const enrollLabel = enrollment => `${trainee(enrollment.host_id)} · Programa ${
 const date = value => value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(value)) : '—';
 const programUI = createProgramUI({ state, zone, esc, opt, empty, pill, isAdmin, canWrite, api, action, render, notify, topic, date, enrollLabel });
 const updatesUI = createUpdatesUI({state,esc,opt,empty,isAdmin,canWrite,api,action,render,notify,enrollLabel,topic,date,invalidateAgenda:programUI.invalidateAgenda});
+const examsUI=createExamsUI({state,esc,opt,empty,isAdmin,canWrite,api,action,notify,render,enrollLabel,date});
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.className = error ? 'error' : ''; node.hidden = false;
 }
@@ -62,6 +76,7 @@ function exitSession() {
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   programUI.reset();
   updatesUI.reset();
+  examsUI.reset();
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -93,7 +108,7 @@ function render() {
     ['Prácticas validadas', w.progress.reduce((n,p)=>n+p.completed_items,0), 'Validaciones de la versión asignada'],
   ].map(([name, count, note]) => `<article class="stat"><label>${name}</label><strong>${count}</strong><small>${note}</small></article>`).join('');
   document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === state.tab));
-  const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, agenda, evidence, library, history };
+  const views = { overview, programs: programUI.renderPrograms, updates: updatesUI.renderUpdates, exams:examsUI.renderExams, agenda, evidence, library, history };
   $('#content').innerHTML = (state.actor.role === 'readonly' ? '<div class="readonly-note">Acceso de solo lectura: puedes consultar tu información asignada.</div>' : '') + views[state.tab]();
 }
 function overview() {
@@ -190,7 +205,9 @@ $('#refresh-button').addEventListener('click', async () => { try { await refresh
 $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
+$('#content').addEventListener('input',event=>examsUI.handleInput(event));
 $('#content').addEventListener('change', event => {
+  examsUI.handleChange(event);
   updatesUI.handleChange(event);
   programUI.handleChange(event);
   if (event.target.matches('#schedule-form [name="enrollment_id"]')) {
@@ -207,6 +224,7 @@ $('#content').addEventListener('change', event => {
 });
 $('#content').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
+  if (await examsUI.handleSubmit(form,data)) return;
   if (await updatesUI.handleSubmit(form,data)) return;
   if (await programUI.handleSubmit(form,data)) return;
   if (form.id === 'enroll-form') action('/api/enrollments', data, 'Emisor inscrito.');
@@ -230,6 +248,7 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (await examsUI.handleClick(button)) return;
   if (await updatesUI.handleClick(button)) return;
   if (await programUI.handleClick(button)) return;
   if (event.target.id === 'complete-button') action('/api/items/complete', { session_id: $('#assessment-form [name="session_id"]').value }, 'Práctica validada.');

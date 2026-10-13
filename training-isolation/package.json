@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test isolation.test.mjs api.test.mjs catalogue.test.mjs programs.test.mjs updates.test.mjs",
-    "test:ui": "node --test ui.test.mjs",
+    "test": "node --test isolation.test.mjs api.test.mjs catalogue.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs",
+    "test:ui": "node --test --test-concurrency=1 ui.test.mjs exams-ui.test.mjs",
     "start": "node server.mjs"
   },
   "devDependencies": {
