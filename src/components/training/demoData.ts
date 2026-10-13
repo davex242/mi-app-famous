@@ -24,3 +24,16 @@ export const DEMO_MATERIALS = [
   { id: 'demo-material-1', title: 'DEMO · Guía de bienvenida', topic: 'Presentación y objetivos', format: 'TXT', content: 'CONTENIDO DEMO\n\n1. Presenta tu sala y explica tu objetivo.\n2. Escucha y saluda de forma respetuosa.\n3. Revisa con tu reclutador lo aprendido.\n\nEste documento es un ejemplo; no es material oficial de la agencia.' },
   { id: 'demo-material-2', title: 'DEMO · Lista de preparación', topic: 'Preparación de sala', format: 'TXT', content: 'CONTENIDO DEMO\n\nAntes de transmitir: revisa audio, iluminación y conexión.\nDurante la práctica: registra lo que funcionó y qué necesitas mejorar.\n\nEsta lista es únicamente un ejemplo de interfaz.' },
 ];
+
+/** Public question examples only: intentionally no correct-option or grading fields. */
+const QUESTION_EXAMPLES = [
+  { topic: 'Presentación y objetivos', prompt: '¿Qué incluirías al explicar el objetivo de una sala?', options: ['Una meta concreta para la sesión', 'Una promesa sin un plan', 'Un resultado sin fecha', 'Un objetivo diferente en cada frase'] },
+  { topic: 'Preparación de sala', prompt: '¿Qué revisarías antes de comenzar una práctica?', options: ['Audio, iluminación y conexión', 'Solo el nombre de la sala', 'Solo el color del fondo', 'Ningún elemento antes de empezar'] },
+  { topic: 'Networking respetuoso', prompt: '¿Qué ejemplo describe una conversación respetuosa?', options: ['Escuchar y responder al tema de la conversación', 'Repetir mensajes sin leer las respuestas', 'Interrumpir a todos los participantes', 'Pedir datos personales a desconocidos'] },
+  { topic: 'Revisión de prácticas', prompt: '¿Qué información ayuda a revisar una práctica?', options: ['Qué se hizo, qué se aprendió y qué mejorar', 'Solo una frase sin contexto', 'Una captura de una práctica distinta', 'Un resultado sin explicación'] },
+  { topic: 'Plan de mejora', prompt: '¿Qué harías para dar seguimiento a una mejora?', options: ['Definir una acción y revisarla en la próxima práctica', 'Cambiar todas las metas sin revisión', 'Eliminar el historial anterior', 'Omitir cualquier comentario recibido'] },
+];
+export const DEMO_QUIZ_QUESTIONS = Array.from({ length: 50 }, (_, index) => {
+  const item = QUESTION_EXAMPLES[index % QUESTION_EXAMPLES.length];
+  return { id: `demo-question-${index + 1}`, number: index + 1, topic: item.topic, prompt: `DEMO · Caso ${index + 1}: ${item.prompt}`, options: [...item.options] };
+});

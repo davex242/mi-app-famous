@@ -24,3 +24,5 @@ npm run test:react-demo
 Use `BROWSER_EXECUTABLE_PATH` for an existing Chromium installation. `APP_NODE_MODULES` optionally points the test to an alternate application dependency directory; it does not modify the application's package or lockfile. `UI_SCREENSHOT_DIR` optionally preserves synthetic QA screenshots. Otherwise the test's temporary bundle and screenshots are removed when it completes.
 
 Backend identity, real role/assignment enforcement, hosted files and concurrent production behavior are not validated by this DEMO check. Keep the module isolated until those integration gates are reviewed.
+
+Programs now expose native practice-detail dialogs with objectives, material references and review requirements. The library supports combined topic/search filters, including accent-insensitive search. Administrators can review 50 public question examples and filter by topic or prompt; no answer or grading keys are present. Invitation attempt/expiry and passing-threshold fields remain view-only; publication and public links are disabled. The examples are not an approved agency question bank.
