@@ -8,10 +8,11 @@ import { preparePersistentDemo,startPersistentSandbox } from './local-runtime.mj
 import { createTrainingService } from './service.mjs';
 import { examTemplate } from './exam-template.mjs';
 import {imageFixture} from './image-fixtures.mjs';
+import {reportlabFixture} from './pdf-fixtures.mjs';
 
 test('local persistence: restart, isolation, exclusive ownership and backup to a new copy',async t=>{
  const store='qa-'+randomUUID(),copy='qa-'+randomUUID(),foreign='qa-'+randomUUID(),link='qa-'+randomUUID(),badTarget='qa-'+randomUUID();
- const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore;
+ const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore,pdfMaterial,pdfBefore;
  const password='Only-synthetic-persistent-password';
  t.afterEach(()=>globalThis.gc?.());
  try{
@@ -48,6 +49,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    const topic=await service.saveTopic(tokens.superadmin,{title:'DEMO durable guide',description:'DEMO guide',category:'DEMO',estimated_minutes:10});await service.publishTopic(tokens.superadmin,{id:topic.id});
    saved=await service.saveMaterial(tokens.superadmin,{title:'DEMO durable document',topic_id:topic.id,kind:'document',content:'DEMO content persists after restart',allow_preview:true,allow_download:true});await service.publishMaterial(tokens.superadmin,{id:saved.id});
    pngMaterial=await service.saveImageMaterial(tokens.superadmin,{title:'DEMO durable image',topic_id:topic.id,image_base64:imageFixture().toString('base64'),allow_preview:true,allow_download:true});await service.publishMaterial(tokens.superadmin,{id:pngMaterial.id});pngBefore=await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id});
+   pdfMaterial=await service.savePDFMaterial(tokens.superadmin,{title:'DEMO durable PDF',topic_id:topic.id,pdf_base64:reportlabFixture().toString('base64'),allow_download:true});await service.publishMaterial(tokens.superadmin,{id:pdfMaterial.id});pdfBefore=await service.downloadMaterial(tokens.superadmin,{id:pdfMaterial.id});
    const v=await service.publishExam(tokens.superadmin,{exam_key:'DEMO persistent exam',pass_percent:80,questions:examTemplate()});
    issued=await service.issueExam(tokens.edit,{enrollment_id:e.id,exam_version_id:v.id,max_attempts:2,expires_at:new Date(Date.now()+86400000).toISOString()});
    const attempt=await service.startExam(issued.invitation_token,{});
@@ -65,6 +67,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    local=await openPersistentSandbox(store);service=createTrainingService(local.db);
    assert.equal(JSON.stringify(await service.workspace(tokens.superadmin)),original);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id}),pngBefore);
+   assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pdfMaterial.id}),pdfBefore);
    const w=await service.workspace(tokens.superadmin);assert.equal(w.update_history.length,1);assert.equal(w.progress[0].completed_items,1);assert.equal(w.progress[0].total_items,15);
    assert.equal((await service.previewMaterial(tokens.edit,{id:saved.id})).content,'DEMO content persists after restart');
    assert.equal((await service.examStatus(issued.invitation_token,{})).attempts[0].attempt_id,completed.attempt_id);
@@ -113,6 +116,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    await restoreLocalSandbox(backup.backup_id,copy);local=await openPersistentSandbox(copy);service=createTrainingService(local.db);
    await assert.rejects(()=>service.me(tokens.superadmin),e=>e.status===401);
    const newToken=(await service.login({username:'demo-superadmin',password})).token,w=await service.workspace(newToken);
+   assert.deepEqual(await service.downloadMaterial(newToken,{id:pdfMaterial.id}),pdfBefore);
    assert.equal(w.enrollments[0].id,e.id);assert.equal(w.completions.length,2);assert.equal(w.update_history.length,1);assert.equal(w.progress[0].completed_items,1);assert.equal(w.exam_attempts[0].id,completed.attempt_id);assert.equal(w.exam_attempts[0].passed,true);
    assert.ok(w.exam_assignments[0].revoked_at);await assert.rejects(()=>service.examStatus(issued.invitation_token,{}),e=>e.status===404);
    await assert.rejects(()=>service.examStatus(liveInvitation.invitation_token,{}),e=>e.status===404);

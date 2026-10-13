@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {loadPrivateImage} from './private-images.mjs';
+import {isPDFMaterial,loadPrivatePDF} from './private-pdfs.mjs';
 import { effectiveItemId, updateHistory } from './updates.mjs';
 
 export async function ensureNoSessionOverlap(tx, enrollmentId, start, duration, ignored, fail) {
@@ -132,6 +133,7 @@ export function createProgramOperations(run, { fields, text, uuid, fail, require
         where i.program_version_id=$1`, [program.id])).rows;
       if (materials.some(material => material.status !== 'published')) fail(409, 'Publish required material revisions first');
       for (const material of materials.filter(m => m.kind === 'document')) {
+        if(isPDFMaterial(material)){await loadPrivatePDF(tx,material.id,fail);continue;}
         if (!(await tx.query('select material_id from training_private.local_material_content where material_id=$1', [material.id])).rows.length) fail(409, 'Material content unavailable');
       }
       for(const material of materials.filter(m=>m.kind==='image'))await loadPrivateImage(tx,material.id,fail);

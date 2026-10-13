@@ -11,6 +11,9 @@ const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
+  'Static PDF without passwords, forms, actions or attachments required':'Usa un PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos, con 1 a 100 páginas.',
+  'PDF exceeds 2 MiB limit':'El PDF debe pesar como máximo 2 MiB.',
+  'Private PDF content unavailable':'No se pudo verificar el PDF privado de esta revisión.',
   'Valid RGB or RGBA PNG required':'Usa una imagen PNG RGB o RGBA de 8 bits, sin animación ni entrelazado.',
   'PNG exceeds 2 MiB limit':'La imagen PNG debe pesar como máximo 2 MiB.',
   'PNG dimensions exceed sandbox limit':'La imagen admite hasta 2048 píxeles por lado y 4 millones de píxeles en total.',
@@ -68,6 +71,7 @@ const errors = {
   'This practice already has a preserved session': 'Esta práctica ya tiene una sesión conservada de una versión anterior.',
   'This practice is already validated': 'Esta práctica ya está validada.',
 };
+const isPDF=value=>value?.kind==='document'&&value.storage_path===`sandbox/materials/${value.id}.pdf`;
 const isAdmin = () => ['superadmin', 'subadmin'].includes(state.actor?.role);
 const canWrite = () => isAdmin() || state.actor?.role === 'edit';
 const opt = (value, label) => `<option value="${esc(value)}">${esc(label)}</option>`;
@@ -178,7 +182,7 @@ function library() {
     const edit = isAdmin() ? `<button class="secondary" data-edit-${materials ? 'material' : 'topic'}="${esc(value.id)}" ${!current ? 'disabled' : ''}>Nueva revisión</button>` : '';
     const publish = isAdmin() && value.status === 'draft' && current ? `<button class="primary" data-publish-${materials ? 'material' : 'topic'}="${esc(value.id)}">Publicar</button>` : '';
     const access = materials ? `<button class="secondary" data-preview-material="${esc(value.id)}" ${!value.allow_preview ? 'disabled' : ''}>Vista previa</button><button class="secondary" data-download-material="${esc(value.id)}" ${!value.allow_download || !['document','image'].includes(value.kind) ? 'disabled' : ''}>Descargar</button>` : '';
-    const detail = materials ? `${value.kind === 'image'?'Imagen PNG':value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
+    const detail = materials ? `${isPDF(value)?'Documento PDF':value.kind === 'image'?'Imagen PNG':value.kind === 'document' ? 'Documento de texto' : 'Enlace HTTPS'} · ${topic(value.topic_id)}` : `${value.category} · ${value.estimated_minutes} minutos`;
     return `<article class="catalogue-card"><div class="catalogue-card-head"><div><h3>${esc(value.title)}</h3><p class="caption">${esc(detail)} · Revisión ${value.revision}</p></div>${pill(value.status)}</div>${!materials && value.description ? `<p class="caption">${esc(value.description)}</p>` : ''}<div class="actions">${access}${edit}${publish}</div></article>`;
   }).join('');
   let form = '';
@@ -189,7 +193,7 @@ function library() {
     const value = state.editMaterial;
     const topics = w.topics.filter(t => ['draft', 'published'].includes(t.status));
     const options = topics.map(t => `<option value="${esc(t.id)}" ${value?.topic_id === t.id ? 'selected' : ''}>${esc(t.title)} · r${t.revision} · ${esc(statuses[t.status])}</option>`).join('');
-    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Se admiten texto, enlaces HTTPS e imágenes PNG privadas.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${!value||value.kind==='document' ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option><option value="image" ${value?.kind==='image'?'selected':''}>Imagen privada (PNG o JPEG)</option></select></label><label id="material-text-field" ${value&&value.kind!=='document' ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${!value||value.kind==='document' ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label id="material-image-field" ${value?.kind!=='image'?'hidden':''}>Imagen PNG o JPEG<input name="image_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" ${value?.kind==='image'&&!value?.image?'required':''}><small>Máximo 2 MiB, 2048 píxeles por lado y 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce, si hace falta, hasta 768 píxeles por lado. Se conserva la proporción y se eliminan los metadatos; la descarga será PNG.${value?.image?' Puedes conservar la imagen actual o elegir otra para esta revisión.':''}</small></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false ? 'checked' : ''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
+    form = `<section class="panel"><div class="panel-head"><div><h2>${value ? 'Nueva revisión del material' : 'Crear material'}</h2><p>Publica primero el tema. Se admiten texto, enlaces HTTPS, imágenes y PDF privados. Los PDF se descargan sin visor integrado.</p></div>${value ? '<button class="secondary" data-cancel-material>Cancelar</button>' : ''}</div><form id="material-form"><label>Título<input name="title" maxlength="120" value="${esc(value?.title)}" required></label><label>Tema y revisión<select name="topic_id" required>${options}</select></label><label>Tipo<select name="kind"><option value="document" ${!value||value.kind==='document'&&!isPDF(value) ? 'selected' : ''}>Documento de texto</option><option value="link" ${value?.kind === 'link' ? 'selected' : ''}>Enlace HTTPS</option><option value="image" ${value?.kind==='image'?'selected':''}>Imagen privada (PNG o JPEG)</option><option value="pdf" ${isPDF(value)?'selected':''}>Documento PDF privado</option></select></label><label id="material-text-field" ${value&&(value.kind!=='document'||isPDF(value)) ? 'hidden' : ''}>Contenido<textarea name="content" maxlength="20000" ${!value||value.kind==='document'&&!isPDF(value) ? 'required' : ''}>${esc(value?.content)}</textarea></label><label id="material-link-field" ${value?.kind !== 'link' ? 'hidden' : ''}>Enlace HTTPS<input name="external_url" type="url" value="${esc(value?.external_url)}" ${value?.kind === 'link' ? 'required' : ''}></label><label id="material-image-field" ${value?.kind!=='image'?'hidden':''}>Imagen PNG o JPEG<input name="image_file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" ${value?.kind==='image'&&!value?.image?'required':''}><small>Máximo 2 MiB, 2048 píxeles por lado y 4 millones de píxeles. PNG RGB/RGBA de 8 bits, sin animación ni entrelazado. JPEG se convierte a PNG y se reduce, si hace falta, hasta 768 píxeles por lado. Se conserva la proporción y se eliminan los metadatos; la descarga será PNG.${value?.image?' Puedes conservar la imagen actual o elegir otra para esta revisión.':''}</small></label><label id="material-pdf-field" ${!isPDF(value)?'hidden':''}>Archivo PDF<input name="pdf_file" type="file" accept="application/pdf,.pdf" ${isPDF(value)&&!value?.pdf?'required':''}><small>Máximo 2 MiB y 100 páginas. PDF estático compatible, sin contraseña, formularios, acciones ni archivos adjuntos. Se conserva el archivo original, incluidos sus metadatos. Esta entrega permite descarga, sin visor integrado.${value?.pdf?' Puedes conservar el PDF actual o elegir otro para esta revisión.':''}</small></label><label class="check-label"><input name="allow_preview" type="checkbox" ${value?.allow_preview !== false&&!isPDF(value) ? 'checked' : ''} ${isPDF(value)?'disabled':''}> Permitir vista previa</label><label class="check-label" id="material-download-field" ${value?.kind === 'link' ? 'hidden' : ''}><input name="allow_download" type="checkbox" ${value?.kind !== 'link' && value?.allow_download !== false ? 'checked' : ''}> Permitir descarga</label><button class="primary" type="submit" ${!topics.length ? 'disabled' : ''}>Guardar borrador</button></form></section>`;
   }
   return head + `<div class="${isAdmin() ? 'cols' : ''}"><section class="panel"><h2>${materials ? 'Materiales' : 'Temas'}</h2>${rows || empty(materials ? 'Aún no hay materiales' : 'Biblioteca vacía', isAdmin() ? 'Crea un borrador y publícalo cuando esté listo.' : 'El contenido aparecerá cuando un administrador lo publique.')}</section>${form}</div><dialog id="material-preview"><div class="panel-head"><h2 id="preview-title"></h2><button class="secondary" data-close-preview>Cerrar</button></div><pre id="preview-text" hidden></pre><img id="preview-image" alt="Material de entrenamiento" hidden><div id="preview-link" hidden><p>Este recurso se abre en una página externa.</p><a class="primary" id="preview-link-anchor" target="_blank" rel="noopener noreferrer">Abrir enlace ↗</a></div></dialog>`;
 }
@@ -233,10 +237,12 @@ $('#content').addEventListener('change', event => {
   }
   if (event.target.id === 'catalogue-history') { state.catalogueHistory = event.target.checked; render(); }
   if (event.target.matches('#material-form [name="kind"]')) {
-    const link = event.target.value === 'link',image=event.target.value==='image';
-    $('#material-text-field').hidden = link||image; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;$('#material-image-field').hidden=!image;
+    const link = event.target.value === 'link',image=event.target.value==='image',pdf=event.target.value==='pdf';
+    $('#material-text-field').hidden = link||image||pdf; $('#material-link-field').hidden = !link; $('#material-download-field').hidden = link;$('#material-image-field').hidden=!image;
     $('#material-form [name="image_file"]').required=image&&!state.editMaterial?.image;
-    $('#material-form [name="content"]').required = !link&&!image; $('#material-form [name="external_url"]').required = link;
+    $('#material-pdf-field').hidden=!pdf;$('#material-form [name="pdf_file"]').required=pdf&&!state.editMaterial?.pdf;
+    $('#material-form [name="allow_preview"]').disabled=pdf;if(pdf)$('#material-form [name="allow_preview"]').checked=false;
+    $('#material-form [name="content"]').required = !link&&!image&&!pdf; $('#material-form [name="external_url"]').required = link;
     $('#material-form [name="allow_download"]').checked = !link;
   }
 });
@@ -261,7 +267,17 @@ $('#content').addEventListener('submit', async event => {
     const body = { title: data.title, topic_id: data.topic_id, kind: data.kind, allow_preview: form.elements.allow_preview.checked,
       allow_download: !link && form.elements.allow_download.checked, ...(link ? { external_url: data.external_url } : { content: data.content }),
       ...(state.editMaterial ? { source_id: state.editMaterial.id } : {}) };
-    if(data.kind==='image'){
+    if(data.kind==='pdf'){
+      if(state.busy)return;state.busy=true;const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const file=form.elements.pdf_file.files[0];let pdf_base64=state.editMaterial?.pdf?.data;
+        if(file){if(file.size>2*1024*1024)throw Error(errors['PDF exceeds 2 MiB limit']);const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));pdf_base64=btoa(binary);}
+        if(!pdf_base64)throw Error('Selecciona un archivo PDF.');
+        const {kind,content,allow_preview,...pdfBody}=body;state.busy=false;
+        action('/api/materials/pdf',{...pdfBody,pdf_base64},'Borrador PDF creado.',()=>{state.editMaterial=null;});
+      }catch(e){state.busy=false;button.disabled=false;notify(e.message,true);}
+    }else if(data.kind==='image'){
+
       if(state.busy)return;state.busy=true;const button=form.querySelector('button[type="submit"]');button.disabled=true;
       try{
         const file=form.elements.image_file.files[0];let image_base64=state.editMaterial?.image?.data;let prepared=null;
@@ -303,9 +319,9 @@ $('#content').addEventListener('click', async event => {
         $('#material-preview').showModal();
       } else {
         const result = await api('/api/materials/download', { id: button.dataset.downloadMaterial });
-        const url = URL.createObjectURL(new Blob([result.image_base64?Uint8Array.from(atob(result.image_base64),c=>c.charCodeAt(0)):result.content], { type: result.mime }));
+        const url = URL.createObjectURL(new Blob([result.image_base64||result.pdf_base64?Uint8Array.from(atob(result.image_base64||result.pdf_base64),c=>c.charCodeAt(0)):result.content], { type: result.mime }));
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = result.filename; anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000); notify(result.image_base64?'Descarga de la imagen PNG iniciada.':'Descarga del documento de texto iniciada.');
+        setTimeout(() => URL.revokeObjectURL(url), 1000); notify(result.pdf_base64?'Descarga del PDF iniciada.':result.image_base64?'Descarga de la imagen PNG iniciada.':'Descarga del documento de texto iniciada.');
       }
     } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
     finally { state.busy = false; }

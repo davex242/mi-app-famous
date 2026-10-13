@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --expose-gc --test --test-concurrency=1 isolation.test.mjs api.test.mjs catalogue.test.mjs images.test.mjs image-input.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs closing.test.mjs closing-export.test.mjs && node --expose-gc --test --test-concurrency=1 persistence.test.mjs closing-persistence.test.mjs",
-    "test:ui": "node --test --test-concurrency=1 ui.test.mjs exams-ui.test.mjs persistence-ui.test.mjs closing-ui.test.mjs images-ui.test.mjs jpeg-ui.test.mjs",
+    "test": "node --expose-gc --test --test-concurrency=1 isolation.test.mjs api.test.mjs catalogue.test.mjs images.test.mjs pdfs.test.mjs image-input.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs closing.test.mjs closing-export.test.mjs && node --expose-gc --test --test-concurrency=1 persistence.test.mjs closing-persistence.test.mjs",
+    "test:ui": "node --test --test-concurrency=1 ui.test.mjs exams-ui.test.mjs persistence-ui.test.mjs closing-ui.test.mjs images-ui.test.mjs jpeg-ui.test.mjs pdfs-ui.test.mjs",
     "start": "node server.mjs",
     "start:persistent": "node local-runtime.mjs start",
     "backup:local": "node local-runtime.mjs backup",
@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",
+    "pdf-lib": "1.17.1",
     "playwright": "1.58.2"
   },
   "engines": {

@@ -13,7 +13,7 @@ npm ci --prefix training-isolation --ignore-scripts
 npm test --prefix training-isolation
 ```
 
-Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.58.2`, con lockfile propio. Playwright se usa exclusivamente para verificar la nueva interfaz en navegador. No se cambian package.json ni package-lock.json de la app, ni se incluyen estas herramientas en su bundle. Se eligió PostgreSQL en memoria porque en esta sesión no hay Docker/PostgreSQL nativo y el backend activo es DatabasePad, no un proyecto Supabase identificado entre los conectados. No se creó un proyecto cloud ni se modificó Mi Taller de Costura.
+Las dependencias están fijadas a `@electric-sql/pglite@0.5.9`, `playwright@1.58.2` y `pdf-lib@1.17.1`, con lockfile propio. Playwright se usa exclusivamente para verificar la nueva interfaz en navegador. No se cambian package.json ni package-lock.json de la app, ni se incluyen estas herramientas en su bundle. Se eligió PostgreSQL en memoria porque en esta sesión no hay Docker/PostgreSQL nativo y el backend activo es DatabasePad, no un proyecto Supabase identificado entre los conectados. No se creó un proyecto cloud ni se modificó Mi Taller de Costura.
 
 ## Qué valida
 
@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.5
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir entrada JPEG: **332 pruebas de SQL/API y 60 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir PDF privados: **344 pruebas de SQL/API y 67 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -67,6 +67,7 @@ Cada edición crea otra fila con el mismo content_key y revision incrementada. N
 Materiales soportados en esta entrega:
 
 - **Documento de texto:** título, revisión exacta de tema, contenido de hasta 20.000 caracteres sujeto al límite JSON de 32 KB, vista previa de texto y descarga real como `.txt`.
+- **PDF privado:** carga real, descarga del original y revisiones; no se ofrece visor integrado. Límites y compatibilidad se detallan abajo.
 - **Imagen PNG privada:** carga real, vista previa y descarga del archivo normalizado, con revisiones y permisos independientes; límites y formato admitido se detallan abajo.
 - **Enlace HTTPS público:** título y URL validados; vista previa muestra un enlace que el usuario debe abrir manualmente. El servidor no descarga contenido externo ni genera miniaturas. No se ofrece descarga de documentos para enlaces.
 
@@ -103,7 +104,7 @@ storage_path es una referencia lógica: no existe una URL pública ni se sirve u
 | /api/materials/download | id | Sesión activa y revisión visible; permiso de descarga |
 | /api/materials/edit-data | id | Administrador; incluye bytes para preparar otra revisión |
 
-Solo la carga PNG amplía el límite HTTP al base64 máximo y 8 KiB de metadatos. Las demás rutas mantienen 32 KiB. El lector acumula buffers dentro del límite y rechaza excesos sin cortar abruptamente la siguiente conexión; decodifica UTF-8 una sola vez. La auditoría conserva actor y revisión; al crear una imagen añade tamaño/dimensiones/checksum, sin bytes ni nombre original.
+Las cargas PNG y PDF amplían el límite HTTP al base64 máximo y 8 KiB de metadatos. Las demás rutas mantienen 32 KiB. El lector acumula buffers dentro del límite y rechaza excesos sin cortar abruptamente la siguiente conexión; decodifica UTF-8 una sola vez. La auditoría conserva actor y revisión; al crear una imagen añade tamaño/dimensiones/checksum, sin bytes ni nombre original.
 
 Se verificaron permisos, datos falsificados, CRC/estructura corruptos, animación/formato rechazados, descompresión excesiva, cargas reales mayores de 32 KiB, metadatos eliminados, acceso SQL denegado, publicación/revisiones y programas con contenido privado faltante/corrupto. En navegador se comprobó el color de píxeles decodificados, descarga exacta, retención de imagen al revisar, PNG falso rechazado y uso en móvil/solo lectura. [Captura móvil](preview/training-images-mobile.png), con una imagen sintética de QA.
 
@@ -119,7 +120,29 @@ Solo el PNG convertido se envía a /api/materials/image. El servidor vuelve a va
 
 No se añaden dependencias, tablas, migraciones ni cambios a la huella o al formato de persistencia. Se verificaron JPEG reales generados en navegador, píxeles/color, reducción proporcional, orientación EXIF de 90 grados, ausencia de metadatos originales, descarga PNG, rechazo previo a la API y uso en móvil. [Captura de conversión móvil](preview/training-jpeg-mobile.png), con fotografías sintéticas de QA. La revisión de navegador se ejecutó con Chromium; no se afirma haber probado todos los navegadores o variantes JPEG.
 
-Referencias del comportamiento de conversión: [ImageBitmap en HTML Standard](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html) y [serialización de canvas](https://html.spec.whatwg.org/multipage/canvas.html). PDF, videos y adjuntos de evidencia permanecen pendientes.
+Referencias del comportamiento de conversión: [ImageBitmap en HTML Standard](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html) y [serialización de canvas](https://html.spec.whatwg.org/multipage/canvas.html). El visor PDF, videos y adjuntos de evidencia permanecen pendientes.
+
+## PDF privados para descarga
+
+La Biblioteca permite elegir Documento PDF privado, cargar un archivo de hasta **2 MiB** y **1 a 100 páginas**, guardar borrador y publicar después del tema exacto. Se admiten PDF estáticos compatibles, con estructura tradicional o con streams de objetos comprimidos. No hay visor PDF integrado: allow_preview queda false y se rechaza la vista previa incluso si alguien altera ese indicador fuera de la API. La descarga requiere sesión activa, revisión visible y allow_download; esos permisos también se aplican a administradores. El editor puede conservar el PDF al crear una revisión o reemplazarlo, sin sobrescribir el original ni cambiar programas ya publicados.
+
+El PDF se guarda **sin modificar sus bytes**, con sus metadatos originales. La descarga usa un nombre generado por servidor; el nombre original del archivo no se almacena. El manifiesto training-private-pdf-v1 incluye base64, tamaño, páginas y SHA-256 y se guarda en la tabla privada local_material_content existente. storage_path termina en .pdf como referencia lógica reservada y kind continúa siendo document; no se cambian tablas, huella del esquema ni formato de respaldos. El workspace devuelve metadatos sin bytes, y no hay una URL pública del archivo.
+
+El servidor comprueba base64 canónico, cabecera, cierre/offset xref y estructura con pdf-lib fijado a 1.17.1. Rechaza documentos declarados cifrados, formularios, anotaciones no vacías, acciones, JavaScript y archivos adjuntos; también revisa objetos que no están enlazados al catálogo. Los PDF con enlaces, marcadores que usan acciones u otras funciones interactivas pueden quedar fuera de este subconjunto. Las páginas deben tener dimensiones finitas positivas y no superar 14400 puntos por lado.
+
+El análisis corre en un **worker de Node**, sin ejecutar contenido PDF, con plazo de 5 segundos, límite de heap de JavaScript de 128 MiB y límites de objetos/profundidad. Un adaptador interno, probado para pdf-lib 1.17.1, reemplaza la descompresión no acotada de streams estructurales: permite contenido sin filtro o Flate y limita la expansión a 8 MiB por stream y 16 MiB acumulados; filtros estructurales no compatibles se rechazan. También limita streams Flate simples conservados en el contexto. Estos límites no son un límite global de RAM ni un antivirus; no se afirma que un PDF aceptado sea seguro para cualquier lector externo. Antes de alojar el servicio hacen falta revisión de dependencias, análisis de archivos y límites de recursos propios de ese entorno.
+
+La validación se repite al publicar material/programa, descargar o preparar una revisión, y comprueba checksum/tamaño/páginas del manifiesto. Cada carga/descarga registra al actor real y checksum sin bytes en auditoría. Se verificó igualdad exacta tras reinicio y en una copia restaurada. Los PDF amplían el límite HTTP solamente en su ruta de carga; las rutas ordinarias siguen con 32 KiB y las instantáneas locales mantienen su límite de 64 MiB.
+
+| Ruta POST | Cuerpo | Permiso |
+|---|---|---|
+| /api/materials/pdf | topic_id, title, pdf_base64, allow_download; source_id opcional | Administrador; crea borrador/revisión, sin vista previa |
+| /api/materials/download | id | Personal activo, revisión visible y descarga permitida |
+| /api/materials/edit-data | id | Administrador; recupera PDF para otra revisión |
+
+Las pruebas incluyen documentos de dos escritores independientes, estructuras tradicionales/comprimidas, contraseña declarada, JavaScript/formularios/acciones/adjuntos, exceso de páginas/descompresión, truncamiento/xref falso, permisos, revisiones y contenido privado corrupto. En navegador se probó carga/publicación, descarga exacta, retención del PDF al revisar, lectura histórica en móvil y cambio de tipo PDF a texto. Capturas: [biblioteca móvil](preview/training-pdf-mobile.png) y [primera página del documento sintético de QA](preview/training-pdf-document.png), renderizada externamente para verificar el archivo de prueba; esa captura no es un visor integrado.
+
+Fuentes del analizador: [PDF-LIB LoadOptions](https://pdf-lib.js.org/docs/api/interfaces/loadoptions) y [workers de Node](https://nodejs.org/api/worker_threads.html). La dependencia y su lockfile pertenecen únicamente a training-isolation; la app activa no cambia. Videos, adjuntos de evidencia e identidad/integración alojadas siguen pendientes.
 
 ## Constructor de programas y agenda automática
 
@@ -213,7 +236,7 @@ Revocar o vencer el enlace bloquea status/start/submit incluso con un intento ab
 | /api/quiz/start | {} | Invitación vigente; intento limitado/idempotente |
 | /api/quiz/submit | attempt_id, answers [{question_id,selected_option}] | Misma invitación; corrección privada |
 
-Las peticiones ordinarias de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Solo la ruta de carga PNG admite el base64 de un archivo de hasta 2 MiB más 8 KiB de metadatos JSON. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
+Las peticiones ordinarias de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Solo las rutas de carga PNG y PDF admiten el base64 de un archivo de hasta 2 MiB más 8 KiB de metadatos JSON. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
 
 ## Cierre administrativo del entrenamiento
 
@@ -302,7 +325,7 @@ El almacenamiento local depende del disco y de ese entorno: no es persistencia c
 
 `bootstrap.sql` representa únicamente las claves UUID necesarias para el ensayo, no el esquema real de DatabasePad. `auth.uid()` se simula con un claim de sesión para probar RLS; no verifica tokens ni prueba el login. La ejecución en memoria no demuestra compatibilidad completa con Supabase/DatabasePad, Auth, Storage o PostgREST.
 
-La API ya implementa validación de prácticas, catálogo de texto/enlaces/imágenes PNG, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado, quiz final con corrección privada y cierre administrativo. Aún no implementa carga de PDF, otros formatos de imagen, videos o diapositivas, archivos de evidencia ni emisión de constancias formales o PDF. Los formatos pendientes requieren ampliar el almacenamiento y la validación; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
+La API ya implementa validación de prácticas, catálogo de texto/enlaces/imágenes PNG, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado, quiz final con corrección privada y cierre administrativo. Aún no implementa otros formatos de imagen, videos o diapositivas, archivos de evidencia ni emisión de constancias formales o PDF. Los formatos pendientes requieren ampliar el almacenamiento y la validación; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
 
 El primer fixture de RLS contiene una pregunta ficticia y prueba solo autorización. Los nuevos tests de publicación/corrección sí usan 50 preguntas reales del ejemplo DEMO y rechazan 49/51, claves inválidas y contenido duplicado. Los completions del primer test de RLS son fixtures de autorización; los tests HTTP, separados, sí exigen revisión y evaluación antes de completar una práctica. Faltan integración con identidad real de Supabase/DatabasePad, configuración del servicio alojado y pruebas de concurrencia en un entorno con múltiples conexiones. PGlite serializa las operaciones en una sola conexión; no se ha demostrado comportamiento distribuido.
 
