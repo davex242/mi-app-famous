@@ -2,7 +2,7 @@
 
 Primera preparación de Etapa 3, exclusivamente en `base44/setup-b8f0f68b`.
 
-Este paquete crea PostgreSQL en memoria con PGlite. No recibe URL de conexión, no utiliza el cliente de la app, no lee credenciales ni importa usuarios o emisores reales. La base temporal se cierra al terminar. La instalación inicial descarga una dependencia; la ejecución de las pruebas no necesita acceder a servicios alojados.
+Por defecto, este paquete crea PostgreSQL en memoria con PGlite. Añade un modo opcional de prueba con almacenamiento local independiente. Ninguno recibe URL de conexión, utiliza el cliente de la app ni importa credenciales, usuarios o emisores reales. La base temporal se elimina al terminar; la local conserva sus datos en el mismo disco. La instalación inicial descarga una dependencia; la ejecución de las pruebas no necesita acceder a servicios alojados.
 
 ## Ejecutar
 
@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.5
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir el quiz final: **266 pruebas de SQL/API y 34 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir persistencia local: **280 pruebas de SQL/API y 38 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -35,7 +35,7 @@ Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir el quiz f
 npm start --prefix training-isolation
 ```
 
-Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO y contraseñas aleatorias que se regeneran cada vez, además de IDs de un emisor sintético asignado a demo-edit y un programa DEMO de 14 días. Abre esa dirección en el navegador para usar la nueva interfaz. No hay conexiones a la app activa. Terminar el proceso elimina usuarios, sesiones y todos los datos.
+Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO y contraseñas aleatorias que se regeneran cada vez, además de IDs de un emisor sintético asignado a demo-edit y un programa DEMO de 14 días. Abre esa dirección en el navegador para usar la nueva interfaz. No hay conexiones a la app activa. Con el comando predeterminado, terminar el proceso elimina usuarios, sesiones y todos los datos. El modo persistente requiere el comando separado indicado abajo.
 
 ## Vista de prueba
 
@@ -45,7 +45,7 @@ Vistas: Resumen, Programas, Agenda, Evidencias, Biblioteca, Actualizaciones, Qui
 
 Para ensayar visualmente: entra como Reclutador con la contraseña de demo-edit, inscribe el emisor y agrega una sesión en Agenda; después envía su práctica desde Evidencias. Cierra sesión y entra como Superadmin o Subadmin para revisar la práctica, guardar una evaluación y validarla. Historial conserva revisiones y notas durante la ejecución del servidor. Solo lectura no tiene emisor asignado al arrancar; el test de navegador asigna un emisor ficticio para verificar esa vista.
 
-Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png), [catálogo de materiales](preview/training-library.png), [constructor de programas](preview/training-programs.png), [agenda](preview/training-agenda.png), [actualización opcional](preview/training-updates.png), [resultados del quiz](preview/training-exams.png) y [quiz móvil](preview/training-quiz-mobile.png). No son una URL pública del sitio.
+Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png), [catálogo de materiales](preview/training-library.png), [constructor de programas](preview/training-programs.png), [agenda](preview/training-agenda.png), [actualización opcional](preview/training-updates.png), [resultados del quiz](preview/training-exams.png), [quiz móvil](preview/training-quiz-mobile.png) y [persistencia local](preview/training-persistent.png). No son una URL pública del sitio.
 
 Para repetir las pruebas de navegador:
 
@@ -177,16 +177,64 @@ Revocar o vencer el enlace bloquea status/start/submit incluso con un intento ab
 | /api/quiz/start | {} | Invitación vigente; intento limitado/idempotente |
 | /api/quiz/submit | attempt_id, answers [{question_id,selected_option}] | Misma invitación; corrección privada |
 
-Todas las peticiones de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad alojada y el almacenamiento persistente siguen pendientes.
+Todas las peticiones de la API mantienen el límite de 32 KB; la plantilla DEMO cabe en él. Los tests cubren aislamiento de actores, versiones, límites, datos falsificados, vencimiento, revocación, envío concurrente/idempotente, puntuaciones en el umbral, móvil y lectura de resultados. La serialización de PGlite no sustituye pruebas de concurrencia distribuida. La identidad y el almacenamiento alojados siguen pendientes; el modo local de abajo no integra un servicio cloud.
+
+## Persistencia local independiente (opcional)
+
+El modo predeterminado sigue en memoria. `start:persistent` conserva datos de prueba en `training-isolation/_local-data/<nombre>/database.json` usando instantáneas de PGlite y un disco local. PGlite se ejecuta en memoria y este módulo guarda una instantánea completa tras cada transacción y escritura SQL, antes de confirmar su resultado. El archivo nuevo se sincroniza y reemplaza atómicamente; si falla el guardado, el proceso bloquea operaciones siguientes y conserva la última instantánea válida. Reabrir recupera esa última instantánea. Es un mecanismo de prueba, con coste de copia completa por operación; no está optimizado para gran volumen. Cada instantánea JSON tiene un límite de 64 MB; se rechaza un guardado que exceda lo que el lector puede reabrir. No se conecta a DatabasePad, Supabase, la app ni otro proyecto. Los datos siguen siendo sintéticos. No se creó un servicio remoto, no se modificó main y no se ejecutó una migración alojada.
+
+Primera ejecución, desde una terminal Bash en la raíz del repositorio:
+
+```sh
+read -r -s -p "Contraseña para las cuentas DEMO: " TRAINING_DEMO_PASSWORD
+export TRAINING_DEMO_PASSWORD
+npm run start:persistent --prefix training-isolation -- demo
+unset TRAINING_DEMO_PASSWORD
+```
+
+Se necesitan de 12 a 200 caracteres. Las cuatro cuentas son demo-superadmin, demo-subadmin, demo-edit y demo-readonly; comparten esa contraseña solo para este ensayo DEMO. Se guarda su derivación scrypt con sal, nunca la contraseña en texto. La consola no imprime la contraseña. Guarda la que elegiste; no se añadió recuperación/cambio de contraseña ni identidad real. El programa, emisor y cuentas se crean una sola vez en una transacción. Si falla el aprovisionamiento, no deja usuarios parciales. Un valor distinto de la variable en otro arranque no cambia cuentas ni contraseñas ya creadas.
+
+Después, para reabrir el mismo almacén sin volver a configurar la contraseña:
+
+```sh
+npm run start:persistent --prefix training-isolation -- demo
+```
+
+El servidor escucha solo en 127.0.0.1:4317. Reiniciar conserva catálogo/textos, versiones de programas, inscripciones, sesiones, evidencias, evaluaciones, validaciones, actualizaciones aceptadas, auditoría, preguntas/claves del quiz e intentos/resultados. Las cuentas y IDs no se regeneran. Se conservan los hashes de sesiones/enlaces y sus revocaciones y vencimientos; persistir no extiende la vigencia. Los tokens del navegador siguen solo en memoria. `/health`, login, mensajes de guardado y pie de página indican el modo correcto, sin exponer rutas locales o credenciales.
+
+Solo se aceptan nombres sencillos de almacén: letras minúsculas, números y guiones, empezando por una letra. No se aceptan rutas, URLs, DSN ni nombres de bases remotas. Una marca de aplicación/formato, checksum de la instantánea, huella del esquema e identidad interna de la base deben coincidir. Una carpeta ajena, enlace simbólico, base incompatible o inicialización incompleta se rechaza **sin reinicializar, borrar datos ni ejecutar una actualización automática**. Hay un directorio de propietario exclusivo, separado de los datos de PostgreSQL, que impide abrir el mismo almacén en dos procesos y realizar un respaldo mientras el servidor lo usa. Cerrar normalmente libera ese bloqueo. Si reaparece una marca que este mismo proceso registró como cerrada, solo puede recuperar esa marca propia bajo otro bloqueo exclusivo. Nunca recupera una marca activa/desconocida ni supone que un PID reutilizado le pertenece.
+
+Si se interrumpe abruptamente el proceso, el bloqueo puede quedar pendiente: inspecciona el PID de `_local-data/_locks/<nombre>/owner.json`, confirma que ese propietario ya no existe y retira únicamente el directorio _locks/<nombre> de ese almacén antes de reabrir. No hay desbloqueo ni borrado automáticos. Se probaron cierre/reapertura normales y restauración; no se afirma tolerancia a pérdida de energía, corrupción del disco o concurrencia distribuida.
+
+### Respaldo y restauración local
+
+Detén primero el servidor de ese almacén. Crear un respaldo:
+
+```sh
+npm run backup:local --prefix training-isolation -- demo
+```
+
+El comando devuelve un backup_id. El respaldo usa dumpDataDir de PGlite fijado a 0.5.9, incluye huella del esquema y checksum SHA-256, y se guarda exclusivamente en `_local-data/backups` con permisos de archivo 0600 dentro de carpetas 0700. Contiene contenido, claves del quiz, respuestas y hashes de credenciales; protégelo como datos privados de la prueba. Tanto los datos como los respaldos están excluidos de Git; no se sirven por HTTP ni se suben al repositorio.
+
+Para restaurarlo en una copia con **otro nombre nuevo**:
+
+```sh
+npm run restore:local --prefix training-isolation -- backup-ID-DEVUELTO demo-recuperado
+npm run start:persistent --prefix training-isolation -- demo-recuperado
+```
+
+Sustituye backup-ID-DEVUELTO por el ID real. El comando solo lee respaldos de ese directorio privado, verifica formato, huella y checksum y nunca sobrescribe un almacén existente. La copia conserva los resultados y revisiones del momento del respaldo, con identidad propia; el original permanece intacto. Se revocan todas las sesiones y enlaces del quiz en la copia para que una restauración no reactive accesos antiguos. Las cuentas mantienen su contraseña original; inicia sesión otra vez y emite enlaces nuevos cuando corresponda.
+
+El almacenamiento local depende del disco y de ese entorno: no es persistencia cloud, una URL pública ni disponibilidad garantizada. Debe ejecutarse en un disco duradero para conservar trabajo real de pruebas; esta sesión verificó con almacenes sintéticos temporales que se retiraron al terminar. Una futura versión con esquema diferente se detiene por incompatibilidad y requiere un procedimiento explícito de actualización; no hace migraciones silenciosas.
 
 ## Límites y siguiente trabajo
 
 `bootstrap.sql` representa únicamente las claves UUID necesarias para el ensayo, no el esquema real de DatabasePad. `auth.uid()` se simula con un claim de sesión para probar RLS; no verifica tokens ni prueba el login. La ejecución en memoria no demuestra compatibilidad completa con Supabase/DatabasePad, Auth, Storage o PostgREST.
 
-La API ya implementa validación de prácticas, catálogo de texto/enlaces, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado y quiz final con corrección privada. Aún no implementa carga de PDF, imágenes, videos o diapositivas, archivos de evidencia ni emisión de constancias/finalización integral del programa. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente, todos temporales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento persistente e identidad alojada antes de integración con la plataforma.
+La API ya implementa validación de prácticas, catálogo de texto/enlaces, constructor/publicación de programas, generación de agenda, reprogramación, asistencia, aceptación opcional de versiones, porcentaje derivado y quiz final con corrección privada. Aún no implementa carga de PDF, imágenes, videos o diapositivas, archivos de evidencia ni emisión de constancias/finalización integral del programa. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente; el comando predeterminado es temporal y el modo opcional conserva datos locales. Los controles de asistencia/reprogramación usan fechas devueltas por API y los de actualización usan una comparación verificada mediante hash; PGlite serializa operaciones en una conexión. Deben probarse la concurrencia real, almacenamiento alojado e identidad real antes de integración con la plataforma.
 
 El primer fixture de RLS contiene una pregunta ficticia y prueba solo autorización. Los nuevos tests de publicación/corrección sí usan 50 preguntas reales del ejemplo DEMO y rechazan 49/51, claves inválidas y contenido duplicado. Los completions del primer test de RLS son fixtures de autorización; los tests HTTP, separados, sí exigen revisión y evaluación antes de completar una práctica. Faltan integración con identidad real de Supabase/DatabasePad, configuración del servicio alojado y pruebas de concurrencia en un entorno con múltiples conexiones. PGlite serializa las operaciones en una sola conexión; no se ha demostrado comportamiento distribuido.
 
-Antes de conectar la interfaz, preparar un proveedor de identidad/API alojado independiente, confirmar el esquema real mediante lectura y probar las operaciones pendientes. No activar backend persistente ni cambiar login de la app compartida con este paquete. La rama actual de la app sigue apuntando al backend existente si se abre normalmente: este sandbox solo se ejecuta mediante los comandos anteriores y no debe confundirse con una copia aislada de toda la app. No se ejecutó build/TypeScript de la app porque sus fuentes y dependencias no cambiaron; los módulos Node se cargaron y ejecutaron en las pruebas.
+Antes de conectar la interfaz, preparar un proveedor de identidad/API alojado independiente, confirmar el esquema real mediante lectura y probar las operaciones pendientes. No activar un backend alojado ni cambiar el login de la app compartida con este paquete. La rama actual de la app sigue apuntando al backend existente si se abre normalmente: este sandbox solo se ejecuta mediante los comandos anteriores y no debe confundirse con una copia aislada de toda la app. No se ejecutó build/TypeScript de la app porque sus fuentes y dependencias no cambiaron; los módulos Node se cargaron y ejecutaron en las pruebas. Los tests SQL/API se ejecutan en serie; la suite persistente tiene su propia invocación para aislar el ciclo de vida del almacén. Exponen GC solamente en el proceso de pruebas para liberar instancias WASM cerradas entre los ensayos de reapertura; el servidor no necesita ese flag.
 
-No se modifica `main`, no se despliega y no se aplica SQL a bases alojadas. No hace falta revertir datos reales: nunca se escribieron. Para retirar estos ensayos basta revertir el commit que añade el paquete; la app no depende de él.
+No se modifica `main`, no se despliega y no se aplica SQL a bases alojadas. No hace falta revertir datos reales: nunca se escribieron. Para retirar los ensayos de código se pueden revertir sus commits en esta rama; la app no depende del paquete. Revertir código no elimina los datos locales ni restaura automáticamente una versión anterior de su esquema. Antes de cambiar la versión del sandbox, conservar un respaldo y comprobar la compatibilidad del esquema.

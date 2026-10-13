@@ -5,6 +5,7 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Costa_Rica';
+const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
 const statuses = { draft: 'Borrador', published: 'Publicado', archived: 'Archivado', in_review: 'En revisión', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada', active: 'En curso', paused: 'En pausa', completed: 'Completada', cancelled: 'Cancelada', scheduled: 'Programada', missed: 'No realizada', rescheduled: 'Reprogramada' };
 const errors = {
@@ -20,7 +21,7 @@ const errors = {
   'An invitation is already active':'Este entrenamiento ya tiene una invitación vigente. Puedes revocarla antes de emitir otra.',
   'Exam content is inconsistent':'El examen tiene contenido incompleto. Solicita una revisión administrativa.',
   'Invalid text':'Completa los textos requeridos y revisa su longitud.',
-  'Invalid credentials': 'La cuenta o la contraseña temporal no coinciden.',
+  'Invalid credentials': 'La cuenta o la contraseña DEMO no coinciden.',
   'Authentication required': 'La sesión venció o fue revocada. Inicia sesión otra vez.',
   'Record unavailable': 'No tienes acceso a ese registro o ya no está disponible.',
   'Write access denied': 'Tu cuenta tiene acceso de solo lectura.',
@@ -157,7 +158,7 @@ function library() {
   const all = materials ? w.materials : w.topics;
   const latest = values => values.filter(value => !values.some(other => other.content_key === value.content_key && other.revision > value.revision));
   const values = state.catalogueHistory ? all : latest(all);
-  const head = `<section class="panel"><div class="panel-head"><div><h2>Biblioteca de entrenamiento</h2><p>Catálogo temporal de temas y materiales. Cada cambio crea una nueva revisión.</p></div><span class="pill">ENTORNO DEMO</span></div><div class="catalogue-tabs"><button class="${!materials ? 'primary' : 'secondary'}" data-catalogue-mode="topics">Temas</button><button class="${materials ? 'primary' : 'secondary'}" data-catalogue-mode="materials">Materiales</button><label class="check-label"><input type="checkbox" id="catalogue-history" ${state.catalogueHistory ? 'checked' : ''}> Mostrar revisiones anteriores</label></div></section>`;
+  const head = `<section class="panel"><div class="panel-head"><div><h2>Biblioteca de entrenamiento</h2><p>Catálogo de prueba de temas y materiales. Cada cambio crea una nueva revisión.</p></div><span class="pill">ENTORNO DEMO</span></div><div class="catalogue-tabs"><button class="${!materials ? 'primary' : 'secondary'}" data-catalogue-mode="topics">Temas</button><button class="${materials ? 'primary' : 'secondary'}" data-catalogue-mode="materials">Materiales</button><label class="check-label"><input type="checkbox" id="catalogue-history" ${state.catalogueHistory ? 'checked' : ''}> Mostrar revisiones anteriores</label></div></section>`;
   const rows = values.slice().sort((a, b) => a.title.localeCompare(b.title)).map(value => {
     const current = latest(all).some(row => row.id === value.id);
     const edit = isAdmin() ? `<button class="secondary" data-edit-${materials ? 'material' : 'topic'}="${esc(value.id)}" ${!current ? 'disabled' : ''}>Nueva revisión</button>` : '';
@@ -188,7 +189,7 @@ async function action(path, body, message, afterSuccess) {
   state.busy = true;
   $('#content').querySelectorAll('button').forEach(button => { button.disabled = true; });
   try {
-    const result = await api(path, body); afterSuccess?.(result); await refresh(); notify((typeof message === 'function' ? message(result) : message) + ' Datos guardados únicamente en este entorno temporal.');
+    const result = await api(path, body); afterSuccess?.(result); await refresh(); notify((typeof message === 'function' ? message(result) : message) + (persistent?' Datos guardados en esta prueba local.':' Datos guardados únicamente en este entorno temporal.'));
   } catch (error) { if (state.token) { render(); notify(error.message, true); } else $('#login-error').textContent = error.message; }
   finally { state.busy = false; }
 }

@@ -1,5 +1,5 @@
 -- Synthetic prerequisites only. These are NOT the actual production schemas.
--- Loaded only into a fresh in-memory PGlite instance by isolation.test.mjs.
+-- Loaded only into a fresh synthetic PGlite sandbox (memory or guarded local storage).
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;

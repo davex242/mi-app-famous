@@ -6,7 +6,8 @@ import { createIsolatedDatabase } from './database.mjs';
 import { createTrainingService, provisionSyntheticUser, ApiError } from './service.mjs';
 import { seedDemoProgram } from './demo-fixtures.mjs';
 
-export function createSandboxHttpServer(service) {
+export function createSandboxHttpServer(service,{storage='memory'}={}) {
+  if(!['memory','local-persistent'].includes(storage))throw Error('Invalid sandbox storage mode');
   const limits = new Map();
   const server = createServer(async (req, res) => {
     const send = (status, body) => {
@@ -29,14 +30,24 @@ export function createSandboxHttpServer(service) {
       const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/quiz': ['quiz.html', 'text/html; charset=utf-8'], '/quiz.mjs': ['quiz.mjs', 'text/javascript; charset=utf-8'], '/exams-ui.mjs': ['exams-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/programs-ui.mjs': ['programs-ui.mjs', 'text/javascript; charset=utf-8'], '/updates-ui.mjs': ['updates-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
       if (req.method === 'GET' && assets[path]) {
         const [file, mime] = assets[path];
-        const content = await readFile(new URL(`web/${file}`, import.meta.url));
+        let content = await readFile(new URL(`web/${file}`, import.meta.url));
+        if(mime.startsWith('text/html')){
+          content=content.toString().replace('<body>',`<body data-storage="${storage}">`);
+          if(storage==='local-persistent')content=content
+            .replace('Los datos se eliminan al reiniciar el servidor','Los datos se conservan al reiniciar')
+            .replace('Usa una cuenta DEMO y su contraseña temporal, mostrada en la consola al iniciar el servidor.','Usa una cuenta DEMO y la contraseña definida al preparar esta prueba local.')
+            .replace('Contraseña temporal','Contraseña DEMO')
+            .replace('DEMO · Datos temporales ·','DEMO · Datos guardados localmente ·')
+            .replace('Los datos son temporales','Los datos se guardan localmente')
+            .replace('Los datos se eliminan al reiniciar.','Los datos se conservan al reiniciar.');
+        }
         res.writeHead(200, {
           'content-type': mime, 'cache-control': 'no-store', 'referrer-policy':'no-referrer', 'x-content-type-options': 'nosniff',
           'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
         });
         return res.end(content);
       }
-      if (req.method === 'GET' && path === '/health') return send(200, { sandbox: true, storage: 'memory' });
+      if (req.method === 'GET' && path === '/health') return send(200, { sandbox: true, storage });
       const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? '')?.[1];
       if (req.method === 'GET' && path === '/api/me') return send(200, await service.me(token));
       if (req.method === 'GET' && path === '/api/enrollments') return send(200, await service.listEnrollments(token));
