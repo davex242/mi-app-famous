@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Lock, AlertCircle, Eye } from 'lucide-react';
 import EntryForm from './EntryForm';
+import './AddEntry.css';
 import emailNotifications from '@/lib/emailNotifications';
 import { useAuth } from '@/context/AuthContext';
 
@@ -20,11 +21,12 @@ export default function AddEntry({ onBack, onSave }: AddEntryProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="add-entry-design space-y-6">
       {/* Encabezado */}
-      <div className="flex items-center gap-4">
+      <div className="entry-heading flex items-center gap-4">
         <button
           onClick={onBack}
+          aria-label="Volver al panel"
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -102,3 +104,4 @@ export default function AddEntry({ onBack, onSave }: AddEntryProps) {
     </div>
   );
 }
+
