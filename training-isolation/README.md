@@ -27,7 +27,7 @@ Las dependencias están fijadas a `@electric-sql/pglite@0.5.9` y `playwright@1.5
 - Declaración del quiz fija a 50, tablas públicas sin claves correctas, RLS en las 23 tablas propuestas.
 - El borrador fuente conserva su bloqueo y ROLLBACK; no se genera una migración desplegable.
 
-Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir catálogo versionado: **210 pruebas de SQL/API y 15 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
+Resultado inicial: 163 pruebas de SQL/RLS pasaron. Después de añadir programas y agenda: **229 pruebas de SQL/API y 20 pruebas de navegador pasaron, 0 fallaron**, contando los tests principales y sus subpruebas. También se verificó el arranque de `server.mjs`: `/health` respondió 200 con `sandbox=true` y `storage=memory`.
 
 ## API y autenticación local añadidas
 
@@ -39,13 +39,13 @@ Solo escucha en `http://127.0.0.1:4317`. Al arrancar imprime cuatro cuentas DEMO
 
 ## Vista de prueba
 
-La interfaz en `web/` usa HTML, CSS y JavaScript sin dependencias de frontend, fuentes remotas ni CDN. Todas las peticiones van a rutas relativas de esta misma API local. El servidor entrega únicamente tres archivos de la interfaz mediante una lista cerrada de rutas; no permite descargar el código de servidor, las credenciales ni archivos arbitrarios. CSP limita recursos y conexiones al mismo origen. El token vive solo en memoria: recargar la página exige iniciar sesión otra vez.
+La interfaz en `web/` usa HTML, CSS y JavaScript sin dependencias de frontend, fuentes remotas ni CDN. Todas las peticiones van a rutas relativas de esta misma API local. El servidor entrega únicamente cuatro archivos de la interfaz mediante una lista cerrada de rutas; no permite descargar el código de servidor, las credenciales ni archivos arbitrarios. CSP limita recursos y conexiones al mismo origen. El token vive solo en memoria: recargar la página exige iniciar sesión otra vez.
 
-Vistas: Resumen, Agenda, Evidencias, Biblioteca e Historial. Los administradores tienen formularios de revisión, evaluación, validación y gestión/publicación del catálogo; el reclutador trabaja con sus emisores y contenido publicado; readonly consulta su alcance sin formularios de escritura. La autorización final permanece en el servidor. El programa inicial es DEMO; el catálogo admite contenido manual en este entorno temporal. No hay acciones de publicación o descarga ficticias. Los próximos módulos están indicados como futuros. Los mensajes confirman exclusivamente guardado temporal real.
+Vistas: Resumen, Programas, Agenda, Evidencias, Biblioteca e Historial. Los administradores tienen formularios de revisión, evaluación, validación, constructor de programas y gestión/publicación del catálogo; el reclutador trabaja con sus emisores y contenido publicado; readonly consulta su alcance sin formularios de escritura. La autorización final permanece en el servidor. El programa inicial es DEMO; el catálogo admite contenido manual en este entorno temporal. No hay acciones de publicación o descarga ficticias. Los próximos módulos están indicados como futuros. Los mensajes confirman exclusivamente guardado temporal real.
 
 Para ensayar visualmente: entra como Reclutador con la contraseña de demo-edit, inscribe el emisor y agrega una sesión en Agenda; después envía su práctica desde Evidencias. Cierra sesión y entra como Superadmin o Subadmin para revisar la práctica, guardar una evaluación y validarla. Historial conserva revisiones y notas durante la ejecución del servidor. Solo lectura no tiene emisor asignado al arrancar; el test de navegador asigna un emisor ficticio para verificar esa vista.
 
-Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png) y [catálogo de materiales](preview/training-library.png). No son una URL pública del sitio.
+Capturas de la ejecución automatizada (datos ficticios): [escritorio](preview/training-desktop.png), [móvil](preview/training-mobile.png), [catálogo de materiales](preview/training-library.png), [constructor de programas](preview/training-programs.png) y [agenda](preview/training-agenda.png). No son una URL pública del sitio.
 
 Para repetir las pruebas de navegador:
 
@@ -85,6 +85,33 @@ Las opciones allow_preview y allow_download se comprueban para cada revisión en
 
 Pruebas adicionales: permisos por rol, ocultación de borradores, suplantación de autor/estado, publicación idempotente, revisión antigua rechazada, contenido previo preservado, límites de texto, enlace inseguro rechazado, revocación de sesión, bloqueo de datos privados y descarga exacta en navegador. El navegador ensaya creación/publicación, vista previa segura, nueva revisión, permisos y formulario de enlaces sin tráfico externo; el catálogo administrativo también se revisó en móvil.
 
+## Constructor de programas y agenda automática
+
+Superadmin/subadmin crean programas, agregan prácticas por día, eligen revisiones exactas de temas/materiales publicados y registran un changelog. La duración inicial es 14 días de entrenamiento, editable de 1 a 90 en este sandbox. Se admiten hasta 180 prácticas y 20 materiales por práctica. Se permiten varios temas en un día, con orden editable dentro de ese día. La fecha de cada práctica se asigna posteriormente en la agenda; la duración no constituye un plazo de caducidad del entrenamiento.
+
+Guardar crea una versión borrador, incluso al editar un programa existente. Las versiones publicadas nunca se sobrescriben y las inscripciones mantienen su program_version_id. Una edición desde una versión antigua se rechaza. Publicar exige que todas las revisiones referenciadas estén publicadas, que los materiales correspondan a la revisión exacta de tema y que los documentos de texto sigan disponibles. Evidencia práctica y evaluación son obligatorias para todos los items del constructor actual; no se pueden desactivar mediante campos del cliente. La publicación repetida no duplica su auditoría.
+
+La agenda usa la zona IANA guardada en la inscripción. Se elige fecha inicial, hora local del emisor y días de semana habilitados (la UI ofrece lunes-viernes o todos los días; la API admite cualquier conjunto no vacío). Día 1 del programa es el primer día habilitado desde la fecha inicial; los días siguientes se asignan a los próximos días habilitados. Los días sin items conservan su espacio en esa secuencia. Si varias prácticas comparten un día, empiezan consecutivamente según posición y estimated_minutes de la revisión del tema.
+
+Ver propuesta calcula sin guardar. Generar vuelve a validar dentro de una transacción e inserta solamente sesiones faltantes. Todas las sesiones existentes se conservan, sean automáticas, manuales, reprogramadas, completadas o no realizadas; no se duplican ni se regeneran. Las fechas se calculan como fechas locales de calendario y luego se convierten a UTC. Se rechazan horas locales inexistentes o repetidas por cambios de zona, jornadas que desbordan medianoche y solapamientos con sesiones del mismo emisor/inscripción. Un conflicto cancela la operación completa, sin generación parcial. No se implementa todavía detección de conflictos entre diferentes emisores ni planificación de sesiones grupales.
+
+Reprogramar conserva session_id y todas sus referencias de evidencia/asistencia; requiere motivo y la fecha vigente esperada, registra fecha anterior/nueva y actor real, y marca edited_manually. Una sesión completada no se reprograma. La asistencia admite presente, ausente, tarde o justificada, con actor y fecha; corregir un registro exige su recorded_at vigente y deja los estados anterior/nuevo en auditoría. No aprueba evidencias ni completa el programa. Historial muestra asistencia y publicaciones; los administradores también pueden ver los cambios de horario registrados en events. Cada llamada vuelve a verificar rol y alcance.
+
+| Ruta POST | Cuerpo | Permiso |
+|---|---|---|
+| /api/programs | title, duration_days, changelog, items; source_id opcional | Administrador; crea programa o versión |
+| /api/programs/publish | id | Administrador; publica la versión validada |
+| /api/agenda/preview | enrollment_id, start_date YYYY-MM-DD, local_time HH:mm, weekdays opcional | Administrador o reclutador asignado; sin escrituras |
+| /api/agenda/generate | Mismos campos que preview | Administrador o reclutador asignado; generación atómica |
+| /api/sessions/reschedule | session_id, local_date, local_time, expected_scheduled_at, reason | Administrador o reclutador asignado |
+| /api/attendance | session_id, status, expected_recorded_at al corregir | Administrador o reclutador asignado |
+
+Cada item de programa contiene day, topic_id, notes y material_ids; el servidor deriva la posición dentro de cada día y las obligaciones prácticas. Los materiales son opcionales, pero los seleccionados deben validarse antes de publicar. Las evaluaciones actuales son por tema y las evidencias por sesión, conservando los contratos de Etapa 1.
+
+Pruebas: permisos, publicación, revisiones, rollback de borradores incompletos, materiales de otro tema rechazados, zona de Costa Rica, días sin fines de semana, prácticas consecutivas, cambios de horario de Nueva York, horas inexistentes/repetidas, generación idempotente, colisiones manuales, sesiones completadas/manualmente editadas conservadas, reprogramación con control de cambios, asistencia y auditoría. El navegador recorrió construcción/publicación, nueva versión, asignación, propuesta sin guardar, generación, reprogramación y asistencia; el constructor fue revisado en móvil.
+
+Fuentes de fecha/hora consultadas: https://www.postgresql.org/docs/current/functions-datetime.html y https://www.postgresql.org/docs/current/datatype-datetime.html. La conversión se verificó también ejecutando PostgreSQL en el sandbox; no se llama a APIs externas de horarios.
+
 `POST /api/login` recibe `{ "username": "demo-edit", "password": "contraseña-local-generada" }`. Devuelve un token opaco temporal; las demás llamadas usan `Authorization: Bearer <token>`. No se aceptan roles ni IDs de actor aportados por el cliente. No hay endpoint de registro ni de cambio de rol. Las contraseñas de fixture usan scrypt con sal aleatoria; los tokens se almacenan como SHA-256 y vencen en una hora. En cada operación se vuelven a consultar actividad y rol del puente privado. Logout revoca la sesión. Esta autenticación solo pertenece al sandbox: no reemplaza Supabase Auth ni el login existente.
 
 | Ruta | Método / cuerpo | Alcance |
@@ -109,7 +136,7 @@ El servidor rechaza orígenes externos y encabezados Host ajenos al loopback, li
 
 `bootstrap.sql` representa únicamente las claves UUID necesarias para el ensayo, no el esquema real de DatabasePad. `auth.uid()` se simula con un claim de sesión para probar RLS; no verifica tokens ni prueba el login. La ejecución en memoria no demuestra compatibilidad completa con Supabase/DatabasePad, Auth, Storage o PostgREST.
 
-La API ya implementa validación de prácticas y gestión/publicación de temas y materiales de texto/enlace. Aún no implementa publicación/edición del programa, carga de PDF, imágenes, videos o diapositivas, archivos de evidencia, corrección del examen, actualización opcional del programa ni cálculo de porcentaje. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Los programas publicados son fixtures DEMO, no contenido real. La agenda se crea manualmente: falta generación automática, reprogramación y asistencia.
+La API ya implementa validación de prácticas, catálogo de texto/enlaces, constructor/publicación de programas, generación de agenda, reprogramación y asistencia. Aún no implementa carga de PDF, imágenes, videos o diapositivas, archivos de evidencia, corrección del examen, aceptación opcional de una nueva versión para inscripciones en curso ni cálculo de porcentaje. Estos archivos requieren el futuro almacenamiento privado aislado; no se simulan subidas o conversiones. En este sandbox las evidencias son descripciones de prácticas. Hay un programa DEMO inicial y programas creados manualmente, todos temporales. Los controles optimistas usan fechas devueltas por API, y PGlite serializa operaciones en una conexión; debe probarse la concurrencia real y endurecerse el control de versiones antes de llevarlo a un servicio alojado.
 
 El fixture del banco contiene una pregunta ficticia: probar que question_count=50 no demuestra que un examen publicado tenga 50 preguntas. Esa comprobación de cantidad real corresponde a la futura operación transaccional de publicación. Los completions del primer test de RLS son fixtures de autorización; los tests HTTP, separados, sí exigen revisión y evaluación antes de completar una práctica. Faltan integración con identidad real de Supabase/DatabasePad, configuración del servicio alojado y pruebas de concurrencia en un entorno con múltiples conexiones. PGlite serializa las operaciones en una sola conexión; no se ha demostrado comportamiento distribuido.
 

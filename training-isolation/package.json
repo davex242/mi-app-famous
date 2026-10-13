@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test isolation.test.mjs api.test.mjs catalogue.test.mjs",
+    "test": "node --test isolation.test.mjs api.test.mjs catalogue.test.mjs programs.test.mjs",
     "test:ui": "node --test ui.test.mjs",
     "start": "node server.mjs"
   },

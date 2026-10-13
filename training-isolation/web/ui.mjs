@@ -1,3 +1,4 @@
+import { createProgramUI } from './programs-ui.mjs';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
@@ -24,6 +25,16 @@ const errors = {
   'Preview is disabled for this revision': 'Esta revisión no permite vista previa.',
   'Download is disabled for this revision': 'Esta revisión no permite descarga.',
   'Valid public HTTPS link required': 'Usa un enlace HTTPS público, sin credenciales ni direcciones locales.',
+  'A newer program version exists': 'Existe una versión más reciente de este programa. Actualiza antes de editar.',
+  'Only the latest draft program can be published': 'Solo se puede publicar el borrador más reciente del programa.',
+  'Publish required topic revisions and retain practical requirements': 'Publica los temas del programa y conserva las prácticas obligatorias.',
+  'Publish required material revisions first': 'Primero publica los materiales seleccionados.',
+  'Material must belong to the exact topic revision': 'Cada material debe pertenecer a la revisión exacta del tema elegido.',
+  'Local time is skipped or repeated by a timezone change': 'Esa hora no existe o se repite por un cambio de horario. Elige otra hora.',
+  'Agenda overlaps an existing session': 'La fecha se cruza con otra sesión del mismo emisor. Elige otro horario.',
+  'Session schedule changed; refresh first': 'Otra acción cambió esta sesión. Actualiza la agenda antes de reprogramar.',
+  'Completed sessions cannot be rescheduled': 'Las sesiones completadas conservan su fecha.',
+  'Attendance changed; refresh first': 'La asistencia cambió. Actualiza antes de guardar otra revisión.',
 };
 const isAdmin = () => ['superadmin', 'subadmin'].includes(state.actor?.role);
 const canWrite = () => isAdmin() || state.actor?.role === 'edit';
@@ -34,12 +45,14 @@ const topic = id => state.workspace.topics.find(t => t.id === id)?.title || 'Tem
 const trainee = id => state.workspace.trainees.find(t => t.host_id === id)?.label || 'Emisor DEMO';
 const enrollLabel = enrollment => `${trainee(enrollment.host_id)} · Programa ${state.workspace.program_versions.find(p => p.id === enrollment.program_version_id)?.version || 1}`;
 const date = value => value ? new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(value)) : '—';
+const programUI = createProgramUI({ state, zone, esc, opt, empty, pill, isAdmin, canWrite, api, action, render, notify, topic, date, enrollLabel });
 function notify(message, error = false) {
   const node = $('#notice'); node.textContent = message; node.className = error ? 'error' : ''; node.hidden = false;
 }
 function exitSession() {
   state.token = null; state.actor = null; state.workspace = null;
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
+  programUI.reset();
   $('#app-view').hidden = true; $('#login-view').hidden = false; $('#login-form').reset();
 }
 async function api(path, body) {
@@ -66,12 +79,12 @@ function render() {
   $('#workspace-subtitle').textContent = isAdmin() ? 'Acompaña el progreso y valida cada práctica.' : 'Tu agenda, tus emisores y su próximo paso.';
   $('#stats').innerHTML = [
     ['Emisores asignados', w.trainees.length, 'Perfiles ficticios'],
-    ['Sesiones programadas', w.sessions.filter(s => s.status === 'scheduled').length, 'Agenda de entrenamiento'],
+    ['Sesiones programadas', w.sessions.filter(s => ['scheduled','rescheduled'].includes(s.status)).length, 'Agenda de entrenamiento'],
     ['Evidencias pendientes', w.evidence.filter(e => e.status === 'pending').length, 'Esperan revisión administrativa'],
     ['Prácticas validadas', w.completions.length, 'Quiz final todavía pendiente'],
   ].map(([name, count, note]) => `<article class="stat"><label>${name}</label><strong>${count}</strong><small>${note}</small></article>`).join('');
   document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === state.tab));
-  const views = { overview, agenda, evidence, library, history };
+  const views = { overview, programs: programUI.renderPrograms, agenda, evidence, library, history };
   $('#content').innerHTML = (state.actor.role === 'readonly' ? '<div class="readonly-note">Acceso de solo lectura: puedes consultar tu información asignada.</div>' : '') + views[state.tab]();
 }
 function overview() {
@@ -89,16 +102,19 @@ function overview() {
 }
 function agenda() {
   const w = state.workspace, active = w.enrollments.filter(e => e.status === 'active');
-  const schedule = canWrite() ? `<section class="panel"><div class="panel-head"><div><h2>Programa una sesión</h2><p>Tu zona horaria: ${esc(zone)}. Elige una práctica de la versión asignada.</p></div></div><form id="schedule-form" class="form-grid"><label>Emisor en entrenamiento<select name="enrollment_id" required>${active.map(e => opt(e.id, enrollLabel(e))).join('')}</select></label><label>Práctica<select name="item_id" required>${itemOptions(active[0]?.id)}</select></label><label>Fecha y hora<input type="datetime-local" name="local_date" required></label><label>Duración en minutos<input type="number" name="duration_minutes" min="1" max="480" value="30" required></label><div class="wide"><button class="primary" type="submit" ${!active.length ? 'disabled' : ''}>Agregar a la agenda →</button></div></form></section>` : '';
+  const extras = programUI.renderAgendaExtras();
+  const schedule = canWrite() ? `<section class="panel"><div class="panel-head"><div><h2>Programa una sesión</h2><p>Tu zona horaria: ${esc(zone)}. Elige una práctica pendiente de la versión asignada.</p></div></div><form id="schedule-form" class="form-grid"><label>Emisor en entrenamiento<select name="enrollment_id" required>${active.map(e => opt(e.id, enrollLabel(e))).join('')}</select></label><label>Práctica<select name="item_id" required>${itemOptions(active[0]?.id) || opt('', 'Todas las prácticas ya tienen sesión')}</select></label><label>Fecha y hora<input type="datetime-local" name="local_date" required></label><label>Duración en minutos<input type="number" name="duration_minutes" min="1" max="480" value="30" required></label><div class="wide"><button class="primary" type="submit" ${!active.length || !itemOptions(active[0]?.id) ? 'disabled' : ''}>Agregar a la agenda →</button></div></form></section>` : '';
   const rows = w.sessions.slice().sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)).map(s => {
     const e = w.enrollments.find(e => e.id === s.enrollment_id);
-    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td></tr>`;
+    const attendance = w.attendance.find(a=>a.session_id===s.id);
+    const attendanceLabels = {present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'};
+    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td><td>${esc(attendance ? attendanceLabels[attendance.status] : 'Sin registro')}</td></tr>`;
   }).join('');
-  return schedule + `<section class="panel"><div class="panel-head"><div><h2>Agenda de entrenamiento</h2><p>Las horas se muestran en tu zona: ${esc(zone)}.</p></div></div>${rows ? `<div class="table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu agenda está lista para empezar', 'Crea una inscripción y programa su primera práctica.')}</section>`;
+  return extras.automatic + schedule + `<section class="panel"><div class="panel-head"><div><h2>Agenda de entrenamiento</h2><p>Las horas se muestran en tu zona: ${esc(zone)}.</p></div></div>${rows ? `<div class="table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th><th>Asistencia</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu agenda está lista para empezar', 'Crea una inscripción y programa su primera práctica.')}</section>` + extras.controls;
 }
 function itemOptions(enrollmentId) {
   const version = state.workspace.enrollments.find(e => e.id === enrollmentId)?.program_version_id;
-  return state.workspace.program_items.filter(item => item.program_version_id === version).sort((a, b) => a.day - b.day).map(item => opt(item.id, `Día ${item.day} · ${topic(item.topic_id)}`)).join('');
+  return state.workspace.program_items.filter(item => item.program_version_id === version && !state.workspace.sessions.some(s=>s.enrollment_id===enrollmentId && s.item_id===item.id)).sort((a, b) => a.day - b.day).map(item => opt(item.id, `Día ${item.day} · ${topic(item.topic_id)}`)).join('');
 }
 function evidence() {
   const w = state.workspace;
@@ -140,7 +156,7 @@ function library() {
 }
 function history() {
   const w = state.workspace;
-  const rows = w.approvals.filter(a => a.reviewed_at).map(a => `<tr><td>${a.topic_id ? 'Publicación de tema' : a.material_id ? 'Publicación de material' : 'Revisión de evidencia'}<small>${esc(a.review_notes)}</small></td><td>${pill(a.status)}</td><td>${esc(date(a.reviewed_at))}</td></tr>`).join('') + w.assessments.map(a => `<tr><td>Evaluación práctica<small>${esc(a.notes)}</small></td><td>${a.score}/100 · ${a.passed ? 'Satisfactoria' : 'Requiere mejora'}</td><td>${esc(date(a.assessed_at))}</td></tr>`).join('');
+  const rows = w.approvals.filter(a => a.reviewed_at).map(a => `<tr><td>${a.topic_id ? 'Publicación de tema' : a.material_id ? 'Publicación de material' : a.program_version_id ? 'Publicación de programa' : 'Revisión de evidencia'}<small>${esc(a.review_notes)}</small></td><td>${pill(a.status)}</td><td>${esc(date(a.reviewed_at))}</td></tr>`).join('') + w.assessments.map(a => `<tr><td>Evaluación práctica<small>${esc(a.notes)}</small></td><td>${a.score}/100 · ${a.passed ? 'Satisfactoria' : 'Requiere mejora'}</td><td>${esc(date(a.assessed_at))}</td></tr>`).join('') + w.attendance.map(a=>`<tr><td>Asistencia de sesión</td><td>${esc({present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'}[a.status])}</td><td>${esc(date(a.recorded_at))}</td></tr>`).join('') + w.events.filter(e=>e.event_type==='session_rescheduled').map(e=>`<tr><td>Reprogramación de sesión<small>${esc(e.details.reason)}</small></td><td>${esc(date(e.details.previous_scheduled_at))} → ${esc(date(e.details.scheduled_at))}</td><td>${esc(date(e.created_at))}</td></tr>`).join('');
   return `<section class="panel"><h2>Historial de entrenamiento</h2><p>Cada revisión conserva su resultado y sus notas.</p>${rows ? `<div class="table-scroll"><table><thead><tr><th>Acción</th><th>Resultado</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu historial comienza aquí', 'Aparecerá cuando se revisen evidencias o se registren evaluaciones.')}</section><div class="future"><h3>Quiz final · 50 preguntas</h3><p>Función futura. Validar una práctica todavía no completa el programa ni genera una certificación.</p></div>`;
 }
 async function action(path, body, message, afterSuccess) {
@@ -148,7 +164,7 @@ async function action(path, body, message, afterSuccess) {
   state.busy = true;
   $('#content').querySelectorAll('button').forEach(button => { button.disabled = true; });
   try {
-    await api(path, body); afterSuccess?.(); await refresh(); notify(message + ' Datos guardados únicamente en este entorno temporal.');
+    const result = await api(path, body); afterSuccess?.(result); await refresh(); notify((typeof message === 'function' ? message(result) : message) + ' Datos guardados únicamente en este entorno temporal.');
   } catch (error) { if (state.token) { render(); notify(error.message, true); } else $('#login-error').textContent = error.message; }
   finally { state.busy = false; }
 }
@@ -166,7 +182,11 @@ $('#logout-button').addEventListener('click', async () => {
   try { await api('/api/logout', {}); exitSession(); } catch (error) { if (state.token) notify(error.message, true); else $('#login-error').textContent = error.message; }
 });
 $('#content').addEventListener('change', event => {
-  if (event.target.matches('#schedule-form [name="enrollment_id"]')) $('#schedule-form [name="item_id"]').innerHTML = itemOptions(event.target.value);
+  programUI.handleChange(event);
+  if (event.target.matches('#schedule-form [name="enrollment_id"]')) {
+    const options=itemOptions(event.target.value); $('#schedule-form [name="item_id"]').innerHTML = options || opt('', 'Todas las prácticas ya tienen sesión');
+    $('#schedule-form button').disabled = !options || state.busy;
+  }
   if (event.target.id === 'catalogue-history') { state.catalogueHistory = event.target.checked; render(); }
   if (event.target.matches('#material-form [name="kind"]')) {
     const link = event.target.value === 'link';
@@ -175,8 +195,9 @@ $('#content').addEventListener('change', event => {
     $('#material-form [name="allow_download"]').checked = !link;
   }
 });
-$('#content').addEventListener('submit', event => {
+$('#content').addEventListener('submit', async event => {
   event.preventDefault(); const form = event.target, data = Object.fromEntries(new FormData(form));
+  if (await programUI.handleSubmit(form,data)) return;
   if (form.id === 'enroll-form') action('/api/enrollments', data, 'Emisor inscrito.');
   if (form.id === 'schedule-form') {
     const parsed = new Date(data.local_date);
@@ -198,6 +219,7 @@ $('#content').addEventListener('submit', event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (await programUI.handleClick(button)) return;
   if (event.target.id === 'complete-button') action('/api/items/complete', { session_id: $('#assessment-form [name="session_id"]').value }, 'Práctica validada.');
   if (button.dataset.catalogueMode) { state.catalogueMode = button.dataset.catalogueMode; render(); }
   if (button.hasAttribute('data-cancel-topic')) { state.editTopic = null; render(); }

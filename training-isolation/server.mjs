@@ -26,7 +26,7 @@ export function createSandboxHttpServer(service) {
       const limit = limits.get(key) ?? { count: 0, until: now + 60000 };
       limit.count++; limits.set(key, limit);
       if (limit.count > (path === '/api/login' ? 20 : 200)) throw new ApiError(429, 'Try again later');
-      const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
+      const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/programs-ui.mjs': ['programs-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
       if (req.method === 'GET' && assets[path]) {
         const [file, mime] = assets[path];
         const content = await readFile(new URL(`web/${file}`, import.meta.url));
@@ -49,6 +49,9 @@ export function createSandboxHttpServer(service) {
         '/api/materials': 'saveMaterial', '/api/materials/publish': 'publishMaterial',
         '/api/materials/edit-data': 'materialEditData', '/api/materials/preview': 'previewMaterial',
         '/api/materials/download': 'downloadMaterial',
+        '/api/programs': 'saveProgram', '/api/programs/publish': 'publishProgram',
+        '/api/agenda/preview': 'previewAgenda', '/api/agenda/generate': 'generateAgenda',
+        '/api/sessions/reschedule': 'reschedule', '/api/attendance': 'recordAttendance',
       };
       if (!routes[path]) throw new ApiError(404, 'Endpoint unavailable');
       if (req.method !== 'POST') throw new ApiError(405, 'Method unavailable');

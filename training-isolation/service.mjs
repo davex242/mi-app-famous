@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createCatalogueOperations } from './catalogue.mjs';
+import { createProgramOperations, ensureNoSessionOverlap } from './programs.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -21,9 +22,9 @@ function uuid(value) {
 }
 function requireAdmin(actor) { if (!admin(actor)) fail(403, 'Administrative role required'); }
 function requireWrite(actor) { if (!admin(actor) && actor.role !== 'edit') fail(403, 'Write access denied'); }
-async function audit(tx, actor, action, entity, entityId, enrollmentId = null) {
-  await tx.query(`insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,enrollment_id)
-    values($1,$2,$3,$4,$5)`, [actor.app_user_id, action, entity, entityId, enrollmentId]);
+async function audit(tx, actor, action, entity, entityId, enrollmentId = null, details = {}) {
+  await tx.query(`insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,enrollment_id,details)
+    values($1,$2,$3,$4,$5,$6)`, [actor.app_user_id, action, entity, entityId, enrollmentId, JSON.stringify(details)]);
 }
 async function scope(tx, actor, host) {
   const { rows } = await tx.query('select recruiter_id from training_private.training_host_assignments where host_id=$1 for share', [host]);
@@ -64,6 +65,7 @@ export function createTrainingService(db) {
   }
   return {
     ...createCatalogueOperations(run, { requireAdmin, fields, text, uuid, fail, audit, admin }),
+    ...createProgramOperations(run, { fields, text, uuid, fail, requireAdmin, requireWrite, enrollment, session, audit }),
     async login(body) {
       fields(body, ['username', 'password']);
       const username = text(body.username, 80);
@@ -98,7 +100,7 @@ export function createTrainingService(db) {
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec('set local role authenticated');
       const result = { sandbox: true, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
-      for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'enrollments', 'sessions', 'evidence', 'assessments', 'approvals', 'completions']) {
+      for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'program_materials', 'enrollments', 'sessions', 'attendance', 'evidence', 'assessments', 'approvals', 'completions', 'events']) {
         // Static table allowlist; never accepts a table name from a caller.
         result[table] = (await tx.query(`select * from public.training_${table}`)).rows;
       }
@@ -126,6 +128,7 @@ export function createTrainingService(db) {
       if (!items.length) fail(409, 'Item does not belong to enrollment version');
       if (typeof body.scheduled_at !== 'string' || !/Z$/.test(body.scheduled_at) || !Number.isFinite(Date.parse(body.scheduled_at))) fail(400, 'UTC date required');
       if (!Number.isInteger(body.duration_minutes) || body.duration_minutes < 1 || body.duration_minutes > 480) fail(400, 'Invalid duration');
+      await ensureNoSessionOverlap(tx, e.id, body.scheduled_at, body.duration_minutes, null, fail);
       const { rows } = await tx.query(`insert into public.training_sessions(enrollment_id,item_id,topic_id,scheduled_at,duration_minutes,auto_generated,edited_manually)
         values($1,$2,$3,$4,$5,false,true) returning *`, [e.id, items[0].id, items[0].topic_id, body.scheduled_at, body.duration_minutes]);
       await audit(tx, actor, 'session_scheduled', 'session', rows[0].id, e.id);
