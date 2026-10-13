@@ -230,19 +230,32 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal(new Date(generatedSession.scheduled_at).toISOString(), '2026-11-03T01:00:00.000Z');
     });
     await t.test('recruiter reschedules and records attendance without duplicating sessions', async () => {
-      await recruiter.locator('#reschedule-form [name="session_id"]').selectOption(generatedSession.id);
+      await recruiter.locator('#agenda-enrollment-filter').selectOption(authoredEnrollment.id);
+      assert.equal(await recruiter.locator('#agenda-results tbody tr').count(),2);
+      await recruiter.locator('#agenda-status-filter').selectOption('completed');
+      assert.equal(await recruiter.locator('#agenda-results tbody tr').count(),0);
+      assert.match(await recruiter.locator('#agenda-results').textContent(),/Sin sesiones para estos filtros/);
+      await recruiter.locator('#agenda-status-filter').selectOption('unrecorded');
+      await recruiter.locator(`[data-agenda-reschedule="${generatedSession.id}"]`).click();
+      assert.equal(await recruiter.locator('#reschedule-form [name="session_id"]').inputValue(),generatedSession.id);
       await recruiter.locator('#reschedule-form [name="local_date"]').fill('2026-11-04');
       await recruiter.locator('#reschedule-form [name="local_time"]').fill('18:00');
       await recruiter.locator('#reschedule-form [name="reason"]').fill('DEMO ajuste de disponibilidad');
+      await recruiter.locator('#agenda-status-filter').selectOption('pending');
+      assert.equal(await recruiter.locator('#reschedule-form [name="reason"]').inputValue(),'DEMO ajuste de disponibilidad');
       await recruiter.locator('#reschedule-form button').click();
       await recruiter.locator('#notice').filter({ hasText: 'Sesión reprogramada' }).waitFor();
-      await recruiter.locator('#attendance-form [name="session_id"]').selectOption(generatedSession.id);
+      await recruiter.locator(`[data-agenda-attendance="${generatedSession.id}"]`).click();
+      assert.equal(await recruiter.locator('#attendance-form [name="session_id"]').inputValue(),generatedSession.id);
+      assert.equal((await db.query('select * from public.training_attendance where session_id=$1',[generatedSession.id])).rows.length,0);
       await recruiter.locator('#attendance-form button').click();
       await recruiter.locator('#notice').filter({ hasText: 'Asistencia registrada' }).waitFor();
       assert.equal((await db.query('select * from public.training_sessions where enrollment_id=$1', [authoredEnrollment.id])).rows.length, 2);
       const session = (await db.query('select scheduled_at,edited_manually from public.training_sessions where id=$1', [generatedSession.id])).rows[0];
       assert.equal(new Date(session.scheduled_at).toISOString(), '2026-11-05T00:00:00.000Z'); assert.equal(session.edited_manually, true);
       assert.equal((await db.query('select status from public.training_attendance where session_id=$1', [generatedSession.id])).rows[0].status, 'present');
+      await recruiter.locator('#agenda-status-filter').selectOption('unrecorded');
+      assert.equal(await recruiter.locator(`[data-agenda-attendance="${generatedSession.id}"]`).count(),0);
     });
     await t.test('program builder fits mobile and recruiter cannot edit programs', async () => {
       await administrator.locator('[data-tab="programs"]').click();
@@ -349,6 +362,10 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       await administrator.locator('[data-tab="agenda"]').click();
       await administrator.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-agenda.png`, fullPage: true });
       const mobile = pages[2];
+      await mobile.locator('[data-tab="agenda"]').click();
+      assert.equal(await mobile.locator('[data-agenda-attendance], [data-agenda-reschedule]').count(),0);
+      assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+      await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-agenda-mobile.png`, fullPage: true });
       await mobile.locator('[data-tab="overview"]').click();
       await mobile.screenshot({ path: `${process.env.UI_SCREENSHOT_DIR}/training-mobile.png`, fullPage: true });
     }

@@ -6,6 +6,7 @@ import {createClosingUI} from './closing-ui.mjs';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const state = { token: null, actor: null, workspace: null, tab: 'overview', busy: false, catalogueMode: 'topics', catalogueHistory: false, editTopic: null, editMaterial: null };
+const agendaFilters = { enrollment: '', status: 'all' };
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Costa_Rica';
 const persistent=document.body.dataset.storage==='local-persistent';
 const labels = { superadmin: 'Superadmin', subadmin: 'Subadmin', edit: 'Reclutador', readonly: 'Solo lectura' };
@@ -112,6 +113,7 @@ function exitSession() {
   clearEvidenceImage();
   clearMaterialVideo();
   state.token = null; state.actor = null; state.workspace = null;
+  agendaFilters.enrollment=''; agendaFilters.status='all';
   state.editTopic = null; state.editMaterial = null; state.catalogueMode = 'topics'; state.catalogueHistory = false;
   programUI.reset();
   updatesUI.reset();
@@ -179,15 +181,23 @@ function overview() {
 }
 function agenda() {
   const w = state.workspace, active = w.enrollments.filter(e => e.status === 'active');
+  if (!w.enrollments.some(e=>e.id===agendaFilters.enrollment)) agendaFilters.enrollment='';
   const extras = programUI.renderAgendaExtras();
   const schedule = canWrite() ? `<section class="panel"><div class="panel-head"><div><h2>Programa una sesión</h2><p>Tu zona horaria: ${esc(zone)}. Elige una práctica pendiente de la versión asignada.</p></div></div><form id="schedule-form" class="form-grid"><label>Emisor en entrenamiento<select name="enrollment_id" required>${active.map(e => opt(e.id, enrollLabel(e))).join('')}</select></label><label>Práctica<select name="item_id" required>${itemOptions(active[0]?.id) || opt('', 'Todas las prácticas ya tienen sesión')}</select></label><label>Fecha y hora<input type="datetime-local" name="local_date" required></label><label>Duración en minutos<input type="number" name="duration_minutes" min="1" max="480" value="30" required></label><div class="wide"><button class="primary" type="submit" ${!active.length || !itemOptions(active[0]?.id) ? 'disabled' : ''}>Agregar a la agenda →</button></div></form></section>` : '';
-  const rows = w.sessions.slice().sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)).map(s => {
+  const filters=`<div class="agenda-filters"><label>Emisor en entrenamiento<select id="agenda-enrollment-filter"><option value="">Todos los entrenamientos</option>${w.enrollments.map(e=>`<option value="${esc(e.id)}" ${agendaFilters.enrollment===e.id?'selected':''}>${esc(enrollLabel(e))}</option>`).join('')}</select></label><label>Mostrar sesiones<select id="agenda-status-filter">${[['all','Todas'],['pending','Programadas y reprogramadas'],['unrecorded','Sin asistencia registrada'],['completed','Completadas']].map(([value,label])=>`<option value="${value}" ${agendaFilters.status===value?'selected':''}>${label}</option>`).join('')}</select></label></div>`;
+  return `<section class="panel agenda-list"><div class="panel-head"><div><h2>Agenda de entrenamiento</h2><p>Las horas se muestran en tu zona: ${esc(zone)}. Los botones preparan el formulario; tú confirmas los cambios.</p></div></div>${filters}<div id="agenda-results" aria-live="polite">${agendaResults()}</div></section>` + extras.controls + extras.automatic + schedule;
+}
+function agendaResults() {
+  const w=state.workspace;
+  const sessions=w.sessions.filter(s=>(!agendaFilters.enrollment || s.enrollment_id===agendaFilters.enrollment) && (agendaFilters.status==='all' || agendaFilters.status==='pending' && ['scheduled','rescheduled'].includes(s.status) || agendaFilters.status==='unrecorded' && !w.attendance.some(a=>a.session_id===s.id) || agendaFilters.status==='completed' && s.status==='completed')).slice().sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at));
+  const rows = sessions.map(s => {
     const e = w.enrollments.find(e => e.id === s.enrollment_id);
     const attendance = w.attendance.find(a=>a.session_id===s.id);
     const attendanceLabels = {present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'};
-    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}${s.current_item_id ? '' : ' · Histórica: versión anterior'}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td><td>${esc(attendance ? attendanceLabels[attendance.status] : 'Sin registro')}</td></tr>`;
+    const actions=canWrite() && e?.status==='active' ? `<div class="agenda-row-actions"><button class="secondary" data-agenda-attendance="${esc(s.id)}">Asistencia</button>${s.status!=='completed'?`<button class="secondary" data-agenda-reschedule="${esc(s.id)}">Reprogramar</button>`:''}</div>` : '<span class="caption">Consulta</span>';
+    return `<tr><td>${esc(trainee(e?.host_id))}<small>${esc(topic(s.topic_id))}${s.current_item_id ? '' : ' · Histórica: versión anterior'}</small></td><td>${esc(date(s.scheduled_at))}<small>${s.duration_minutes} minutos</small></td><td>${pill(s.status)}</td><td>${esc(attendance ? attendanceLabels[attendance.status] : 'Sin registro')}</td><td>${actions}</td></tr>`;
   }).join('');
-  return extras.automatic + schedule + `<section class="panel"><div class="panel-head"><div><h2>Agenda de entrenamiento</h2><p>Las horas se muestran en tu zona: ${esc(zone)}.</p></div></div>${rows ? `<div class="table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th><th>Asistencia</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('Tu agenda está lista para empezar', 'Crea una inscripción y programa su primera práctica.')}</section>` + extras.controls;
+  return `<p class="caption">${sessions.length} de ${w.sessions.length} sesiones visibles</p>${rows ? `<div class="table-scroll"><table><thead><tr><th>Emisor y práctica</th><th>Fecha</th><th>Estado</th><th>Asistencia</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>` : w.sessions.length ? empty('Sin sesiones para estos filtros', 'Selecciona otro entrenamiento o muestra todas las sesiones.') : empty('Tu agenda está lista para empezar', 'Crea una inscripción y programa su primera práctica.')}`;
 }
 function itemOptions(enrollmentId) {
   const version = state.workspace.enrollments.find(e => e.id === enrollmentId)?.program_version_id;
@@ -273,6 +283,11 @@ $('#content').addEventListener('change', event => {
   examsUI.handleChange(event);
   updatesUI.handleChange(event);
   programUI.handleChange(event);
+  if (event.target.id==='agenda-enrollment-filter' || event.target.id==='agenda-status-filter') {
+    agendaFilters.enrollment=$('#agenda-enrollment-filter').value;
+    agendaFilters.status=$('#agenda-status-filter').value;
+    $('#agenda-results').innerHTML=agendaResults();
+  }
   if (event.target.matches('#schedule-form [name="enrollment_id"]')) {
     const options=itemOptions(event.target.value); $('#schedule-form [name="item_id"]').innerHTML = options || opt('', 'Todas las prácticas ya tienen sesión');
     $('#schedule-form button').disabled = !options || state.busy;
@@ -361,6 +376,14 @@ $('#content').addEventListener('submit', async event => {
 $('#content').addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button || state.busy) return;
+  if (button.dataset.agendaAttendance || button.dataset.agendaReschedule) {
+    const attendance=!!button.dataset.agendaAttendance;
+    const select=$(attendance ? '#attendance-form [name="session_id"]' : '#reschedule-form [name="session_id"]');
+    const id=button.dataset.agendaAttendance || button.dataset.agendaReschedule;
+    if (!select || ![...select.options].some(option=>option.value===id)) return;
+    select.value=id; select.dispatchEvent(new Event('change',{bubbles:true}));
+    select.scrollIntoView({block:'center',behavior:'smooth'}); select.focus(); return;
+  }
   if (['agenda','evidence','exams'].includes(button.dataset.openTab)) {
     state.tab=button.dataset.openTab; $('#notice').hidden=true; render();
     $('#workspace-title').setAttribute('tabindex','-1'); $('#workspace-title').focus(); return;
