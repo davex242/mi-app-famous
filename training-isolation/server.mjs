@@ -39,7 +39,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
       const limit = limits.get(key) ?? { count: 0, until: now + 60000 };
       limit.count++; limits.set(key, limit);
       if (limit.count > (path === '/api/login' ? 20 : 200)) throw new ApiError(429, 'Try again later');
-      const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/quiz': ['quiz.html', 'text/html; charset=utf-8'], '/quiz.mjs': ['quiz.mjs', 'text/javascript; charset=utf-8'], '/exams-ui.mjs': ['exams-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/programs-ui.mjs': ['programs-ui.mjs', 'text/javascript; charset=utf-8'], '/updates-ui.mjs': ['updates-ui.mjs', 'text/javascript; charset=utf-8'], '/closing-ui.mjs':['closing-ui.mjs','text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
+      const assets = { '/image-input.mjs':['image-input.mjs','text/javascript; charset=utf-8'], '/': ['index.html', 'text/html; charset=utf-8'], '/quiz': ['quiz.html', 'text/html; charset=utf-8'], '/quiz.mjs': ['quiz.mjs', 'text/javascript; charset=utf-8'], '/exams-ui.mjs': ['exams-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/programs-ui.mjs': ['programs-ui.mjs', 'text/javascript; charset=utf-8'], '/updates-ui.mjs': ['updates-ui.mjs', 'text/javascript; charset=utf-8'], '/closing-ui.mjs':['closing-ui.mjs','text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
       if (req.method === 'GET' && assets[path]) {
         const [file, mime] = assets[path];
         let content = await readFile(new URL(`web/${file}`, import.meta.url));
