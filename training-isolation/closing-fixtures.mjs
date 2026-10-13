@@ -2,7 +2,7 @@ import {seedDemoProgram} from './demo-fixtures.mjs';
 import {examTemplate} from './exam-template.mjs';
 
 // Synthetic QA only: all meaningful training mutations use the real service.
-export async function seedClosingScenario(db,service,tokens,{validated=1,demo:existingDemo=null,proofImageBase64=null}={}) {
+export async function seedClosingScenario(db,service,tokens,{validated=1,demo:existingDemo=null,proofImageBase64=null,proofPDFBase64=null}={}) {
   const administrator=await service.me(tokens.admin),recruiter=await service.me(tokens.recruiter);
   const demo=existingDemo||await seedDemoProgram(db,administrator.app_user_id,recruiter.app_user_id);
   const topics=[];
@@ -17,7 +17,7 @@ export async function seedClosingScenario(db,service,tokens,{validated=1,demo:ex
   const sessions=[];
   for(let i=0;i<items.length;i++){
     const session=await service.schedule(tokens.recruiter,{enrollment_id:e.id,item_id:items[i].id,scheduled_at:`2026-11-0${i+1}T01:00:00Z`,duration_minutes:10});
-    const proof=await service.submitEvidence(tokens.recruiter,{session_id:session.id,description:'DEMO evidencia de práctica supervisada',...(proofImageBase64?{image_base64:proofImageBase64,consent_confirmed:true}:{})});
+    const proof=await service.submitEvidence(tokens.recruiter,{session_id:session.id,description:'DEMO evidencia de práctica supervisada',...(proofPDFBase64?{pdf_base64:proofPDFBase64,consent_confirmed:true}:proofImageBase64?{image_base64:proofImageBase64,consent_confirmed:true}:{})});
     await service.reviewEvidence(tokens.admin,{evidence_id:proof.id,decision:'approved',notes:'DEMO evidencia verificada'});
     await service.assess(tokens.admin,{session_id:session.id,score:90,passed:true,notes:'DEMO evaluación satisfactoria'});
     if(i<validated)await service.completeItem(tokens.admin,{session_id:session.id});

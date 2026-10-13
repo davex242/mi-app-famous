@@ -6,8 +6,9 @@ import { createUpdateOperations, effectiveItemId, updateHistory, currentProgress
 import { createExamOperations } from './exams.mjs';
 import {createClosingOperations,scopedClosingRecords,scopedExamIssuances} from './closing.mjs';
 import {createClosingExportOperations} from './closing-export.mjs';
+import {validatePDF} from './private-pdfs.mjs';
 import {normalizePNG} from './private-images.mjs';
-import {createEvidenceFileOperations,loadEvidenceImage,evidencePath,evidenceMetadata} from './evidence-files.mjs';
+import {createEvidenceFileOperations,loadEvidenceFile,evidencePath,evidenceMetadata} from './evidence-files.mjs';
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
 const admin = actor => ['superadmin', 'subadmin'].includes(actor.role);
@@ -164,17 +165,18 @@ export function createTrainingService(db) {
       return rows[0];
     }),
     submitEvidence: (token, body) => run(token, async (tx, actor) => {
-      requireWrite(actor); fields(body, ['session_id', 'description','image_base64','consent_confirmed']);
+      requireWrite(actor); fields(body, ['session_id', 'description','image_base64','pdf_base64','consent_confirmed']);
       const s = await session(tx, actor, body.session_id),description=text(body.description);
-      const attached=Object.hasOwn(body,'image_base64');
+      const png=Object.hasOwn(body,'image_base64'),pdf=Object.hasOwn(body,'pdf_base64'),attached=png||pdf;
+      if(png&&pdf)fail(400,'Choose one evidence file');
       if(attached&&body.consent_confirmed!==true)fail(400,'Evidence file consent required');
       if(!attached&&Object.hasOwn(body,'consent_confirmed'))fail(400,'Invalid fields');
-      const image=attached?normalizePNG(body.image_base64,fail):null,id=randomUUID();
+      const file=pdf?await validatePDF(body.pdf_base64,fail):png?normalizePNG(body.image_base64,fail):null,id=randomUUID();
       const { rows } = await tx.query(`insert into public.training_evidence(id,enrollment_id,session_id,topic_id,description,submitted_by,storage_path)
-        values($1,$2,$3,$4,$5,$6,$7) returning *`, [id,s.enrollment_id, s.id, s.topic_id,description, actor.app_user_id,image?evidencePath(id):null]);
-      if(image)await tx.query('insert into training_private.local_evidence_content(evidence_id,body) values($1,$2)',[id,JSON.stringify(image)]);
+        values($1,$2,$3,$4,$5,$6,$7) returning *`, [id,s.enrollment_id, s.id, s.topic_id,description, actor.app_user_id,file?evidencePath(id,pdf?'pdf':'image'):null]);
+      if(file)await tx.query('insert into training_private.local_evidence_content(evidence_id,body) values($1,$2)',[id,JSON.stringify(file)]);
       await tx.query('insert into public.training_approvals(evidence_id,requested_by) values($1,$2)', [id, actor.app_user_id]);
-      await audit(tx, actor, 'evidence_submitted', 'evidence', id, s.enrollment_id,image?{attachment:evidenceMetadata(image),consent_confirmed:true}:{});
+      await audit(tx, actor, 'evidence_submitted', 'evidence', id, s.enrollment_id,file?{attachment:evidenceMetadata(file),consent_confirmed:true}:{});
       return rows[0];
     }),
     reviewEvidence: (token, body) => run(token, async (tx, actor) => {
@@ -185,7 +187,7 @@ export function createTrainingService(db) {
       if (!rows.length) fail(404, 'Record unavailable');
       const e = await enrollment(tx, actor, rows[0].enrollment_id);
       if (rows[0].status !== 'pending') fail(409, 'Evidence already reviewed');
-      if(body.decision==='approved')await loadEvidenceImage(tx,rows[0],fail);
+      if(body.decision==='approved')await loadEvidenceFile(tx,rows[0],fail);
       await tx.query('update public.training_evidence set status=$1 where id=$2', [body.decision, rows[0].id]);
       const approval = await tx.query(`update public.training_approvals set status=$1,reviewed_by=$2,review_notes=$3,reviewed_at=now()
         where evidence_id=$4 and status='pending' returning id`, [body.decision, actor.app_user_id, notes, rows[0].id]);
@@ -209,7 +211,7 @@ export function createTrainingService(db) {
       if (items[0].evidence_required) {
         const { rows } = await tx.query("select * from public.training_evidence where session_id=$1 and status='approved'", [s.id]);
         if (!rows.length) fail(409, 'Approved practical evidence required');
-        await loadEvidenceImage(tx,rows.sort((a,b)=>a.id.localeCompare(b.id))[0],fail);
+        await loadEvidenceFile(tx,rows.sort((a,b)=>a.id.localeCompare(b.id))[0],fail);
       }
       if (items[0].assessment_required) {
         const { rows } = await tx.query(`select passed from public.training_assessments where enrollment_id=$1 and topic_id=$2

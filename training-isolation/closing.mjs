@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { effectiveItemId,updateHistory,currentProgress } from './updates.mjs';
-import {loadEvidenceImage,evidenceMetadata} from './evidence-files.mjs';
+import {loadEvidenceFile,evidenceMetadata} from './evidence-files.mjs';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 export async function scopedClosingRecords(tx,actor,admin) {
@@ -33,7 +33,7 @@ export function createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,
       const credit=completions.find(c=>c.item_id===item.id);
       const source=sessions.find(s=>s.status==='completed'&&effectiveItemId(s.item_id,history,items)===item.id&&s.topic_id===item.topic_id);
       const proof=source&&evidence.find(p=>p.session_id===source.id&&p.topic_id===item.topic_id);
-      const image=proof?await loadEvidenceImage(tx,proof,fail):null;
+      const file=proof?await loadEvidenceFile(tx,proof,fail):null;
       const assessment=assessments.find(a=>a.topic_id===item.topic_id);
       const problems=[];
       if(!credit)problems.push('validation_missing');
@@ -41,7 +41,7 @@ export function createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,
       if(item.evidence_required&&!proof)problems.push('approved_evidence_missing');
       if(item.assessment_required&&assessment?.passed!==true)problems.push('passing_assessment_missing');
       checks.push({item_id:item.id,topic_id:item.topic_id,day:item.day,ready:!problems.length,problems,
-        ...(image?{evidence_attachment:evidenceMetadata(image)}:{}),
+        ...(file?{evidence_attachment:evidenceMetadata(file)}:{}),
         completion:credit||null,session_id:source?.id||null,evidence_id:proof?.id||null,
         assessment:assessment?{id:assessment.id,passed:assessment.passed,score:assessment.score,assessed_by:assessment.assessed_by,assessed_at:assessment.assessed_at}:null});
     }

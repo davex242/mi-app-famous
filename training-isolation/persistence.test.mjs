@@ -13,7 +13,7 @@ import {videoFixture} from './video-fixtures.mjs';
 
 test('local persistence: restart, isolation, exclusive ownership and backup to a new copy',async t=>{
  const store='qa-'+randomUUID(),copy='qa-'+randomUUID(),foreign='qa-'+randomUUID(),link='qa-'+randomUUID(),badTarget='qa-'+randomUUID();
- const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore,pdfMaterial,pdfBefore,videoMaterial,videoBefore,evidenceImage,evidenceBefore;
+ const dirs=[store,copy,foreign,link,badTarget],backups=[];let local,service,fixture,tokens={},e,saved,issued,completed,firstLease,pngMaterial,pngBefore,pdfMaterial,pdfBefore,videoMaterial,videoBefore,evidenceImage,evidenceBefore,evidencePDF,pdfEvidenceBefore;
  const password='Only-synthetic-persistent-password';
  t.afterEach(()=>globalThis.gc?.());
  try{
@@ -42,6 +42,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    await service.reviewEvidence(tokens.superadmin,{evidence_id:evidence.id,decision:'approved',notes:'DEMO verified'});
    await service.assess(tokens.superadmin,{session_id:session.id,score:90,passed:true,notes:'DEMO practical assessment'});
    await service.completeItem(tokens.superadmin,{session_id:session.id});
+   evidencePDF=(await service.submitEvidence(tokens.edit,{session_id:session.id,description:'DEMO PDF de evidencia persistente',pdf_base64:reportlabFixture().toString('base64'),consent_confirmed:true})).id;pdfEvidenceBefore=await service.downloadEvidenceFile(tokens.superadmin,{evidence_id:evidencePDF});
    const oldItems=(await local.db.query('select day,topic_id,notes from public.training_program_items where program_version_id=$1 order by day',[fixture.demo.program_version_id])).rows;
    const next=await service.saveProgram(tokens.superadmin,{source_id:fixture.demo.program_version_id,title:'DEMO durable updated program',duration_days:15,changelog:'DEMO extra practice',items:[...oldItems.map(i=>({...i,material_ids:[]})),{day:15,topic_id:oldItems[0].topic_id,notes:'DEMO new requirement',material_ids:[]}]});
    await service.publishProgram(tokens.superadmin,{id:next.id});
@@ -69,6 +70,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    local=await openPersistentSandbox(store);service=createTrainingService(local.db);
    assert.equal(JSON.stringify(await service.workspace(tokens.superadmin)),original);
    assert.deepEqual(await service.downloadEvidenceFile(tokens.superadmin,{evidence_id:evidenceImage}),evidenceBefore);
+   assert.deepEqual(await service.downloadEvidenceFile(tokens.superadmin,{evidence_id:evidencePDF}),pdfEvidenceBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pngMaterial.id}),pngBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:pdfMaterial.id}),pdfBefore);
    assert.deepEqual(await service.downloadMaterial(tokens.superadmin,{id:videoMaterial.id}),videoBefore);
@@ -121,6 +123,7 @@ test('local persistence: restart, isolation, exclusive ownership and backup to a
    await assert.rejects(()=>service.me(tokens.superadmin),e=>e.status===401);
    const newToken=(await service.login({username:'demo-superadmin',password})).token,w=await service.workspace(newToken);
    assert.deepEqual(await service.downloadEvidenceFile(newToken,{evidence_id:evidenceImage}),evidenceBefore);
+   assert.deepEqual(await service.downloadEvidenceFile(newToken,{evidence_id:evidencePDF}),pdfEvidenceBefore);
    assert.deepEqual(await service.downloadMaterial(newToken,{id:pdfMaterial.id}),pdfBefore);
    assert.deepEqual(await service.downloadMaterial(newToken,{id:videoMaterial.id}),videoBefore);
    assert.equal(w.enrollments[0].id,e.id);assert.equal(w.completions.length,2);assert.equal(w.update_history.length,1);assert.equal(w.progress[0].completed_items,1);assert.equal(w.exam_attempts[0].id,completed.attempt_id);assert.equal(w.exam_attempts[0].passed,true);
