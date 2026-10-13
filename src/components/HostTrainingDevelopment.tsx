@@ -5,7 +5,8 @@ import TrainingAdministration from './training/TrainingAdministration';
 import RecruiterTrainingWorkspace from './training/RecruiterTrainingWorkspace';
 
 /**
- * Host Training & Development — native React DEMO (synthetic data, no backend calls).
+ * Host Training & Development — native React DEMO by default. Explicit localhost opt-in
+ * selects a separate synthetic API session; no production client is imported.
  *
  * The workspace is chosen from the authenticated role and the *other* workspace
  * component is never mounted, so its content is not rendered for unauthorized roles

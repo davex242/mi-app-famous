@@ -1,0 +1,78 @@
+/** Local synthetic API only. The existing application's identity is never sent. */
+export function localTrainingEnabled() {
+  return typeof window !== 'undefined' && window.location.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost'].includes(window.location.hostname) &&
+    new URLSearchParams(window.location.search).get('trainingSandbox') === 'local';
+}
+export class LocalTrainingError extends Error {
+  constructor(public status: number) {
+    super(status === 401 ? 'La sesión de prueba venció o las credenciales no son válidas.' :
+      status === 403 ? 'Tu cuenta de prueba no tiene permiso para esta operación.' :
+      status === 409 ? 'Los datos cambiaron o esta inscripción ya existe. Actualiza la vista.' :
+      status === 429 ? 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.' :
+      'No se pudo completar la solicitud de prueba. Intenta nuevamente.');
+  }
+}
+export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
+export type PublicRow = {id?: string; [key: string]: unknown};
+export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
+const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
+export class LocalTrainingApi {
+  private token: string | null = null;
+  private verified = false;
+  private generation = 0;
+  private controllers = new Set<AbortController>();
+  clear() {
+    this.generation++; this.token = null; this.verified = false;
+    for (const controller of this.controllers) controller.abort();
+    this.controllers.clear();
+  }
+  private async request(path: string, body?: object): Promise<unknown> {
+    if (!localTrainingEnabled()) throw new LocalTrainingError(403);
+    const generation = this.generation, controller = new AbortController();
+    this.controllers.add(controller);
+    try {
+      const response = await fetch(path, {method: body ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store',
+        redirect: 'error', signal: controller.signal,
+        headers: {...(body ? {'Content-Type':'application/json'} : {}), ...(this.token ? {Authorization:`Bearer ${this.token}`} : {})},
+        ...(body ? {body: JSON.stringify(body)} : {})});
+      if (generation !== this.generation) throw new LocalTrainingError(401);
+      if (!response.ok) {if (response.status === 401) this.clear(); throw new LocalTrainingError(response.status);}
+      const result = await response.json();
+      if (generation !== this.generation) throw new LocalTrainingError(401);
+      return result;
+    } finally {this.controllers.delete(controller);}
+  }
+  async connect() {
+    const health = await this.request('/health') as {sandbox?: boolean; react_training_api?: number};
+    if (health?.sandbox !== true || health.react_training_api !== 1) throw new LocalTrainingError(403);
+    this.verified = true;
+  }
+  async login(username: string, password: string) {
+    this.clear(); await this.connect();
+    const result = await this.request('/api/login', {username, password}) as {sandbox?: boolean; token?: string};
+    if (result?.sandbox !== true || !/^[A-Za-z0-9_-]{43}$/.test(result.token ?? '')) throw new LocalTrainingError(403);
+    this.token = result.token!;
+    try {return await this.load();} catch (error) {await this.logout(); throw error;}
+  }
+  async load(): Promise<{actor: LocalActor; workspace: LocalWorkspace}> {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    const actor = await this.request('/api/me') as LocalActor;
+    if (actor?.sandbox !== true || !['superadmin','subadmin','edit','readonly'].includes(actor.role)) {this.clear(); throw new LocalTrainingError(403);}
+    const workspace = await this.request('/api/workspace') as LocalWorkspace;
+    if (workspace?.sandbox !== true || tables.some(key => !Array.isArray(workspace[key]))) {this.clear(); throw new LocalTrainingError(403);}
+    return {actor, workspace};
+  }
+  async enroll(host_id: string, program_version_id: string, timezone: string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/enrollments', {host_id, program_version_id, timezone});
+  }
+  async logout() {
+    // Remove UI access immediately; revoke the server session when reachable.
+    const token = this.token; this.clear();
+    if (token && localTrainingEnabled()) {
+      try {await fetch('/api/logout', {method:'POST', credentials:'omit', redirect:'error', cache:'no-store',
+        headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`}, body:'{}'});} catch { /* Server expiry remains authoritative. */ }
+    }
+  }
+}

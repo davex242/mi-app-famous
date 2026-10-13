@@ -17,8 +17,10 @@ function requestBody(req,maxBytes){
   });
 }
 
-export function createSandboxHttpServer(service,{storage='memory'}={}) {
+export function createSandboxHttpServer(service,{storage='memory',reactAssets=null}={}) {
   if(!['memory','local-persistent'].includes(storage))throw Error('Invalid sandbox storage mode');
+  // Optional locally compiled React assets; fixed routes, no caller-selected paths.
+  const reactRoutes = {'/react-training':['index.html','text/html; charset=utf-8'], '/react-training/bundle.js':['bundle.js','text/javascript; charset=utf-8'], '/react-training/bundle.css':['bundle.css','text/css; charset=utf-8']};
   const limits = new Map();
   const server = createServer(async (req, res) => {
     const send = (status, body) => {
@@ -40,9 +42,10 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
       limit.count++; limits.set(key, limit);
       if (limit.count > (path === '/api/login' ? 20 : 200)) throw new ApiError(429, 'Try again later');
       const assets = { '/image-input.mjs':['image-input.mjs','text/javascript; charset=utf-8'], '/': ['index.html', 'text/html; charset=utf-8'], '/quiz': ['quiz.html', 'text/html; charset=utf-8'], '/quiz.mjs': ['quiz.mjs', 'text/javascript; charset=utf-8'], '/exams-ui.mjs': ['exams-ui.mjs', 'text/javascript; charset=utf-8'], '/ui.mjs': ['ui.mjs', 'text/javascript; charset=utf-8'], '/programs-ui.mjs': ['programs-ui.mjs', 'text/javascript; charset=utf-8'], '/updates-ui.mjs': ['updates-ui.mjs', 'text/javascript; charset=utf-8'], '/closing-ui.mjs':['closing-ui.mjs','text/javascript; charset=utf-8'], '/ui.css': ['ui.css', 'text/css; charset=utf-8'] };
+      if (reactAssets && reactRoutes[path]) assets[path] = reactRoutes[path];
       if (req.method === 'GET' && assets[path]) {
         const [file, mime] = assets[path];
-        let content = await readFile(new URL(`web/${file}`, import.meta.url));
+        let content = await readFile(reactAssets && reactRoutes[path] ? new URL(file, reactAssets) : new URL(`web/${file}`, import.meta.url));
         if(mime.startsWith('text/html')){
           content=content.toString().replace('<body>',`<body data-storage="${storage}">`);
           if(storage==='local-persistent')content=content
@@ -59,7 +62,7 @@ export function createSandboxHttpServer(service,{storage='memory'}={}) {
         });
         return res.end(content);
       }
-      if (req.method === 'GET' && path === '/health') return send(200, { sandbox: true, storage });
+      if (req.method === 'GET' && path === '/health') return send(200, { sandbox: true, storage, react_training_api: 1 });
       const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? '')?.[1];
       if (req.method === 'GET' && path === '/api/me') return send(200, await service.me(token));
       if (req.method === 'GET' && path === '/api/enrollments') return send(200, await service.listEnrollments(token));
