@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Hosted preview uses one fresh login and keeps its verified session in memory.
     // A stored legacy profile alone must not restore the unified preview entry.
-    if(hostedTrainingConfig()){localStorage.removeItem('hostmanager_user');setLoading(false);return;}
+    if(hostedTrainingConfig()){localStorage.removeItem('hostmanager_user');void (async()=>{try{const saved=sessionStorage.getItem('famous_preview_app_profile');if(saved){const profile=JSON.parse(saved);const training=sharedTrainingApi(hostedTrainingConfig(),profile.email);if(training&&await training.resume()){const {data:active,error}=await supabase.from('app_users').select('*').eq('id',profile.id).eq('is_active',true).single();if(!error&&active){active.password_hash='';setUser(active);sessionStorage.setItem('famous_preview_app_profile',JSON.stringify(active));}else sessionStorage.removeItem('famous_preview_app_profile');}else sessionStorage.removeItem('famous_preview_app_profile');}}catch{sessionStorage.removeItem('famous_preview_app_profile');}finally{setLoading(false);}})();return;}
     // Check for stored session
     const storedUser = localStorage.getItem('hostmanager_user');
     if (storedUser) {
@@ -66,14 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('id', data.id);
 
       setUser(profile);
-      if(!training)localStorage.setItem('hostmanager_user', JSON.stringify(profile));
+      if(!training)localStorage.setItem('hostmanager_user', JSON.stringify(profile));else sessionStorage.setItem('famous_preview_app_profile',JSON.stringify(profile));
       
       // Log the login activity
       await ActivityLogger.login(profile);
       
       return { success: true };
     } catch (err) {
-      await logoutSharedTraining();setUser(null);localStorage.removeItem('hostmanager_user');
+      await logoutSharedTraining();setUser(null);localStorage.removeItem('hostmanager_user');sessionStorage.removeItem('famous_preview_app_profile');sessionStorage.removeItem('famous_preview_app_profile');
       return { success: false, error: 'Login failed' };
     }
   };
