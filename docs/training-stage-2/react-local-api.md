@@ -1,6 +1,6 @@
 # Native React / local synthetic API
 
-The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Native agenda now supports preview/confirmation, chosen weekdays, local dates/times, attendance and rescheduling with required reasons. Evidence/review, uploads, material access, invitations and completion remain to be adapted; the standalone local UI remains their working reference.
+The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Native agenda now supports preview/confirmation, chosen weekdays, local dates/times, attendance and rescheduling with required reasons. Native evidence submission, private PNG/PDF/MP4 downloads and administrative approval/rejection are connected. Assessment/practical validation, material access, invitations and completion remain to be adapted; the standalone local UI remains their working reference.
 
 ## Run
 
@@ -22,10 +22,16 @@ React sends the exact preview hash when confirming generation. The server recomp
 
 Changing proposal inputs or refreshing the workspace removes the old confirmation. Already scheduled/completed practices are skipped. Attendance submits the currently displayed recorded timestamp; rescheduling submits the displayed schedule timestamp, enrollment-local date/time and reason. Server checks reject stale timestamps and overlapping sessions. Read-only actors see the scoped agenda with no operational forms, and recording attendance does not complete a practice.
 
+## Evidence and review
+
+Recruiters and administrators can submit a required description with an optional PNG, static PDF or H.264 MP4 (up to 2 MiB), using a scoped active session. The file requires an explicit test consent checkbox, reset whenever the file changes. Client size/type checks precede encoding; existing server validators remain authoritative. Native JPEG preparation is still pending; the standalone runtime's JPEG conversion remains available and unchanged.
+
+Files are fetched only through the permission-checked download endpoint and a short-lived browser Blob URL. Workspace DTOs carry no file bytes. The current native view does not inline-preview attachments. Reviewers must explicitly choose approval/rejection and supply notes. Only administrators see pending review forms; read-only accounts see no submission/review forms. Pending notes survive status filters. Already-reviewed or closed evidence cannot be reviewed again; the server rejects stale review attempts. Evidence approval does not create assessment, completion or final closing.
+
 ## Validation
 
 `npm run test:react-local` exercises the actual React component, HTTP server, credential service and isolated database in Chromium, including enrollment, duplicate conflicts, read-only denial, role downgrade, revocation, explicit opt-in and capability checks, mobile navigation and absence of external traffic/browser persistence. Set `BROWSER_EXECUTABLE_PATH` for an existing Chromium binary if needed.
 
-Validation on 2026-10-13: 105 local React/API checks, 233 default React DEMO checks, 46 existing HTTP API/program tests and strict TypeScript checking passed. Enrollment screenshots are in `preview/react-local-api/`; agenda/attendance screenshots are in `preview/react-agenda-api/`.
+Validation on 2026-10-13: 127 local React/API checks, 233 default React DEMO checks, strict TypeScript checking passed. The evidence service was not modified; the preceding agenda stage also passed 46 HTTP API/program tests. Enrollment screenshots are in `preview/react-local-api/`; agenda/attendance screenshots are in `preview/react-agenda-api/`, and review screenshots in `preview/react-evidence-api/`.
 
 Keep `npm run test:react-demo` as the default-mode regression check. These local tests do not establish production readiness, hosted access policies, concurrent hosted behavior or a migration plan. Training remains on `base44/setup-b8f0f68b` and is not merged into main.
