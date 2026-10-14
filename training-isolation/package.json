@@ -18,7 +18,8 @@
     "test:react-exam-editor": "node react-exam-editor-ui.test.mjs",
     "test:react-program-editor": "node react-program-editor-ui.test.mjs",
     "test:react-file-editor": "node react-file-editor-ui.test.mjs",
-    "test:react-layout": "node react-layout-ui.test.mjs"
+    "test:react-layout": "node react-layout-ui.test.mjs",
+    "test:content-proposal": "node --test content-proposal.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",

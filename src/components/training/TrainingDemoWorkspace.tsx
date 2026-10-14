@@ -1,3 +1,4 @@
+import TrainingContentProposal from './TrainingContentProposal';
 import React, { useEffect, useRef, useState } from 'react';
 import { DEMO_TRAINEES, DEMO_PROGRAMS, DEMO_SESSIONS, DEMO_EVIDENCE, DEMO_MATERIALS, DEMO_QUIZ_QUESTIONS } from './demoData';
 import './TrainingDemoWorkspace.css';
@@ -100,6 +101,7 @@ export default function TrainingDemoWorkspace({ mode }: { mode: Mode }) {
     <nav className="td-tabs" aria-label="Secciones de entrenamiento">{TABS.map(item => <button type="button" key={item.id} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'td-active' : ''} onClick={() => go(item.id)}>{item.label}</button>)}</nav>
     <h2 className="td-view-title" tabIndex={-1} ref={heading}>{TABS.find(item => item.id === tab)?.label}</h2>
     <div className="td-stats">{[['Emisores de ejemplo', trainees.length], ['Sesiones programadas', sessions.filter(s => s.status !== 'completed').length], ['Evidencias pendientes', evidence.filter(e => e.status === 'pending').length], ['Prácticas validadas', trainees.reduce((n, t) => n + t.completed, 0)]].map(([label, count]) => <article key={label}><span>{label}</span><strong>{count}</strong></article>)}</div>
+    {tab==='library'&&admin&&<TrainingContentProposal/>}
     {view}
     <dialog ref={practiceDialog} onClose={()=>setPractice(null)} aria-labelledby="td-practice-title"><div className="td-row-head"><h2 id="td-practice-title">DEMO · Día {practice?.day}: {practiceTitle}</h2><button type="button" onClick={()=>setPractice(null)}>Cerrar detalle</button></div><p>{practiceProgram?.title} · Versión {practiceProgram?.version}</p><p><strong>Duración de ejemplo:</strong> 30 minutos</p><h3>Objetivo de la práctica</h3><p>Definir un objetivo concreto, practicarlo con el reclutador y explicar qué se aprendió.</p><h3>Materiales de apoyo</h3><p>{DEMO_MATERIALS[((practice?.day || 1)-1)%2].title} · Revisión DEMO 1</p><h3>Evidencia y revisión</h3><p>Descripción de lo realizado, evidencia autorizada y evaluación administrativa. Consultar este detalle no programa ni valida la práctica.</p><button type="button" onClick={()=>{practiceDialog.current?.close();setPractice(null);go('library');}}>Ir a la biblioteca</button></dialog>
     <dialog ref={dialog} onClose={() => setMaterial(null)} aria-labelledby="td-material-title"><div className="td-row-head"><h2 id="td-material-title">{material?.title}</h2><button type="button" onClick={() => setMaterial(null)}>Cerrar</button></div><pre>{material?.content}</pre></dialog>

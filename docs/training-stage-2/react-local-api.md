@@ -105,3 +105,11 @@ Keep `npm run test:react-demo` as the default-mode regression check. These local
 ## Responsive review
 
 Run `npm run test:react-layout` for the dedicated synthetic interface review. It checks all nine sections under superadmin/subadmin/edit/readonly at 1440, 768, 390 and 320px, long unbroken descriptions/titles, loaded 14-practice program and 50-question exam editors, permission-specific forms, evidence dialogs/Escape, active tab styling, keyboard table access, 44px button height and absence of external traffic/browser persistence. The 2026-10-13 review passed 570 checks; see `react-layout-review.md` for corrections, captures and limits.
+
+## Agency content proposal
+
+`TrainingContentProposal` displays a public study proposal in administrative Biblioteca views, including the default hosted DEMO. It contains 14 proposed study units, practices, evidence and review criteria, and a complete TXT study download. All content is explicitly a draft for agency review. It includes no exam prompts/keys and makes no API write. Passing percentage, attempt limits and expiry remain unspecified.
+
+The separate 50-case editorial bank is retained as a private review file. GitHub repository visibility was verified as public and automatic review rejected uploading the answer bank. No new private-bank endpoint or loader is included in this public change; existing exam services and editors are unchanged. Future review/import must use appropriate private storage. The public study proposal does not contain the bank's questions, keys or rationales.
+
+Run `npm run test:content-proposal` for the study structure; the extended `test:react-demo` checks all 14 units, download and 320px layout. See `training-content-proposal.md` for the complete course and pending agency decisions.

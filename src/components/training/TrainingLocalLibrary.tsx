@@ -1,3 +1,4 @@
+import TrainingContentProposal from './TrainingContentProposal';
 import TrainingLocalFileEditor from './TrainingLocalFileEditor';
 import TrainingLocalContentEditor from './TrainingLocalContentEditor';
 import React,{useEffect,useRef,useState} from 'react';
@@ -24,6 +25,7 @@ export default function TrainingLocalLibrary({api,workspace,role,refresh,notify,
   const visible=workspace.materials.filter(row=>(!topic||row.topic_id===topic)&&normalized(text(row,'title')).includes(normalized(search)));
   const data=preview?.workspace===workspace?preview.data:null;
   return <>
+    {(role==='superadmin'||role==='subadmin')&&<TrainingContentProposal/>}
     <label>Buscar material local<input aria-label="Buscar material local" value={search} onChange={e=>setSearch(e.target.value)}/></label>
     <label>Tema del material local<select aria-label="Tema del material local" value={topic} onChange={e=>setTopic(e.target.value)}><option value="">Todos</option>{workspace.topics.map(row=><option key={row.id} value={row.id}>{text(row,'title')}</option>)}</select></label>
     {visible.map(row=><article className="td-panel td-local-material" key={row.id}><h3>{text(row,'title')}</h3><p>Revisión {String(row.revision)} · {text(row,'kind')} · {text(row,'status')}</p>

@@ -21,3 +21,8 @@
 .training-demo.td-local .td-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 .training-demo .td-table-scroll:focus-visible{outline:2px solid #a995ff;outline-offset:3px}
 @media(max-width:700px){.training-demo.td-local .td-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.training-demo .td-content-proposal summary{cursor:pointer;font-size:13px;font-weight:600;line-height:1.8;padding:10px 0;overflow-wrap:anywhere}
+.training-demo .td-content-proposal summary:focus-visible{outline:2px solid #a995ff;outline-offset:3px}
+.training-demo .td-content-proposal ol{padding-left:24px;font-size:12px;line-height:2;color:var(--td-muted);list-style:decimal}
+.training-demo .td-content-proposal li{overflow-wrap:anywhere}
