@@ -6,8 +6,10 @@ export class HostedTrainingApi extends LocalTrainingApi{
  quizUrl(token:string){return `${window.location.origin}/training-quiz/index.html#${token}`;}
  protected async request(path:string,body?:object):Promise<unknown>{
   if(!hostedTrainingEnabled(this.config))throw new LocalTrainingError(403);
+  // Vercel's same-origin protection cookie unlocks the preview only.
+  // The proxy forwards the training bearer, never browser cookies, to Supabase.
   const generation=this.generation,controller=new AbortController();this.controllers.add(controller);
-  try{const response=await fetch('/api/training'+path,{method:body?'POST':'GET',credentials:'omit',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(this.token?{Authorization:'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  try{const response=await fetch('/api/training'+path,{method:body?'POST':'GET',credentials:'same-origin',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(this.token?{Authorization:'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
    if(generation!==this.generation)throw new LocalTrainingError(401);
    if(!response.ok){if(response.status===401)this.clear();throw new LocalTrainingError(response.status);}
    const result=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);return result;

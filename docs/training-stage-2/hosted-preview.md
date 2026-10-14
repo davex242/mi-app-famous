@@ -49,3 +49,9 @@ Next: verify the protected preview in the user’s Vercel session. Authenticated
 The user saved the two Edge server variables. The feature preview server variables were set with branch-only scope and the same reviewed commit was rebuilt successfully on Vercel. The Edge bundle was deployed with explicit Buffer injection after a real startup check identified eager module initialization before entrypoint globals. Hosted health and unauthenticated rejection are verified separately from Vercel protected-preview access; an authenticated full journey is not claimed. Production settings, main and draft content remain unchanged.
 
 Direct hosted checks returned HTTP 200 with initialized hosted-preview health and HTTP 401 for the private identity route without a session. These confirm server configuration/startup and database reachability, not the full browser-to-proxy flow. Vercel is READY but automation bypass is denied by the connector; its health route still needs a signed-in browser check.
+
+## Protected preview login correction
+
+Same-origin proxy requests include the browser’s Vercel protection cookie. Previously `credentials: omit` caused a protection redirect before health/login could complete. The proxy does not forward Cookie to Supabase; training authorization still requires the separate bearer/session checks. Direct Supabase Auth requests continue to omit browser credentials.
+
+The first user account was confirmed by the provider, but its confirmation redirect used the project’s default localhost URL. Before additional signups, configure the training project’s Auth Site URL/redirect allowlist for the stable preview. Do not disable confirmation or edit auth users to bypass it.
