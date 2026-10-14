@@ -188,6 +188,12 @@ export class LocalTrainingApi {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/programs/publish',{id});
   }
+  async saveFileMaterial(kind:'png'|'pdf'|'mp4', body:{source_id?:string;topic_id:string;title:string;allow_preview:boolean;allow_download:boolean}, data:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    const path=kind==='png'?'/api/materials/image':kind==='pdf'?'/api/materials/pdf':'/api/materials/video';
+    const {allow_preview,...common}=body;
+    await this.request(path,{...common,...(kind==='pdf'?{pdf_base64:data}:kind==='png'?{image_base64:data,allow_preview}:{video_base64:data,allow_preview})});
+  }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.
     const token = this.token; this.clear();

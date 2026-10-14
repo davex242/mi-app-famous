@@ -1,3 +1,4 @@
+import TrainingLocalFileEditor from './TrainingLocalFileEditor';
 import TrainingLocalContentEditor from './TrainingLocalContentEditor';
 import React,{useEffect,useRef,useState} from 'react';
 import {LocalActor,LocalTrainingApi,LocalWorkspace,MaterialPreview,MaterialDownload,PublicRow} from './localTrainingApi';
@@ -42,6 +43,7 @@ export default function TrainingLocalLibrary({api,workspace,role,refresh,notify,
       {data?.type==='video'&&<video ref={video} controls preload="none" src={preview?.videoUrl}/>}
       <button onClick={close}>Cerrar material</button>
     </dialog>
+    {(role==='superadmin'||role==='subadmin')&&<TrainingLocalFileEditor api={api} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={notify}/>}
     {(role==='superadmin'||role==='subadmin')&&<TrainingLocalContentEditor api={api} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={notify}/>}
   </>;
 }
