@@ -9,8 +9,10 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
   const [weekdays,setWeekdays]=useState([1,2,3,4,5,6,7]);
   const [preview,setPreview]=useState<{result:AgendaPreview;parameters:AgendaParameters;workspace:LocalWorkspace}|null>(null);
   const [sessionId,setSessionId]=useState(''),[attendance,setAttendance]=useState('');
+  const [batchSessions,setBatchSessions]=useState<string[]>([]),[batchAttendance,setBatchAttendance]=useState(''),[batchResults,setBatchResults]=useState<{id:string;ok:boolean;message:string}[]>([]);
   const [newDate,setNewDate]=useState(''),[newTime,setNewTime]=useState(''),[reason,setReason]=useState('');
   const active=workspace.enrollments.filter(row=>row.status==='active');
+  const eligibleSessions=workspace.sessions.filter(row=>active.some(e=>e.id===row.enrollment_id));
   const enrollment=workspace.enrollments.find(row=>row.id===enrollmentId);
   const selected=workspace.sessions.find(row=>row.id===sessionId);
   const selectedEnrollment=workspace.enrollments.find(row=>row.id===selected?.enrollment_id);
@@ -46,6 +48,25 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
         <label>Sesión de asistencia<select aria-label="Sesión de asistencia" required disabled={busy} value={sessionId} onChange={e=>{setSessionId(e.target.value);setAttendance('');setNewDate('');setNewTime('');setReason('');}}><option value="">Selecciona una sesión</option>{workspace.sessions.filter(row=>workspace.enrollments.some(e=>e.id===row.enrollment_id&&e.status==='active')).map(row=><option key={row.id} value={row.id}>{sessionLabel(row)}</option>)}</select></label>
         <label>Asistencia<select aria-label="Asistencia" required disabled={busy} value={attendance} onChange={e=>setAttendance(e.target.value)}><option value="">Selecciona un estado</option>{Object.entries(attendanceLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
         <button disabled={busy||!writable||!attendance}>Guardar asistencia DEMO</button>
+      </form>
+      <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
+        const results:{id:string;ok:boolean;message:string}[]=[];
+        for(const id of batchSessions.filter(id=>eligibleSessions.some(row=>row.id===id))){
+          const record=workspace.attendance.find(row=>row.session_id===id);
+          try{await api.attendance(id,batchAttendance,record?text(record,'recorded_at'):null);results.push({id,ok:true,message:'Guardada'});}
+          catch(reason){if(reason instanceof Error&&/401|403/.test(reason.message))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo registrar'});}
+        }
+        setBatchResults(results);await refresh();notify(`Asistencia masiva: ${results.filter(row=>row.ok).length} guardadas, ${results.filter(row=>!row.ok).length} fallidas.`);
+      });}}><h3>Registrar asistencia de varios emisores</h3>
+        <p>Selecciona las sesiones correspondientes. Cada registro conserva su emisor y sesión; una falla individual no reemplaza los demás resultados.</p>
+        <fieldset disabled={busy}><legend>Sesiones seleccionadas: {batchSessions.length}</legend>
+          <button type="button" disabled={busy} onClick={()=>setBatchSessions(eligibleSessions.map(row=>row.id!))}>Seleccionar todas</button>
+          <button type="button" disabled={busy} onClick={()=>setBatchSessions([])}>Limpiar selección</button>
+          {eligibleSessions.map(row=><label key={row.id} className="td-weekday"><input type="checkbox" checked={batchSessions.includes(row.id!)} onChange={event=>setBatchSessions(current=>event.target.checked?[...current,row.id!]:current.filter(id=>id!==row.id))}/>{sessionLabel(row)}</label>)}
+        </fieldset>
+        <label>Estado de asistencia<select aria-label="Estado de asistencia masiva" required disabled={busy} value={batchAttendance} onChange={e=>setBatchAttendance(e.target.value)}><option value="">Selecciona un estado</option>{Object.entries(attendanceLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+        <button disabled={busy||!batchSessions.some(id=>eligibleSessions.some(row=>row.id===id))||!batchAttendance}>Guardar asistencia de {batchSessions.length} sesiones</button>
+        {!!batchResults.length&&<div role="status"><h4>Resultados por sesión</h4><ul>{batchResults.map(row=><li key={row.id}>{sessionLabel(workspace.sessions.find(s=>s.id===row.id)??{} as PublicRow)}: {row.message}</li>)}</ul></div>}
       </form>
       {selected&&writable&&selected.status!=='completed'&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.reschedule(sessionId,newDate,newTime,text(selected,'scheduled_at'),reason);await refresh();notify('Sesión DEMO reprogramada.');
