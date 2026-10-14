@@ -86,3 +86,8 @@ Remote counts verified 14 published topics, 14 published guides, one published p
 
 One clearly labelled synthetic host without a MICO/legacy ID is assigned to the verified owner and enrolled in the published program in America/Costa_Rica. No real host was imported or modified. No invitation or attempt was generated automatically; browser guide, practice, quiz and closing verification is the next step. Main, production and DatabasePad remain unchanged.
 
+## Hosted quiz invitation transport
+
+A real invitation was issued successfully, but the standalone quiz page still used the original Authorization header after the proxy was changed to the dedicated training header. It now sends `X-Training-Authorization` through the fixed gateway, keeping the token in memory and out of browser storage. Existing active invitations remain valid; duplicate issuance returns conflict by design. Lost raw links cannot be recovered from stored hashes and must be revoked/reissued without resetting the enrollment attempt budget.
+
+An independent exam-editor publication attempt produced a JSON options constraint error in the hosted runtime; correcting the Postgres JSON parameter adaptation remains pending. It did not replace the reviewed published exam, which still has fifty questions.
