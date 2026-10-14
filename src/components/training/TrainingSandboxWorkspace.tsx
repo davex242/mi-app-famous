@@ -29,7 +29,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [data,setData] = useState<{actor:LocalActor; workspace:LocalWorkspace}|null>(null);
   const [section,setSection] = useState('Resumen'), [busy,setBusy] = useState(false), [error,setError] = useState('');
   const [username,setUsername] = useState(hosted?defaultEmail:''), [password,setPassword] = useState('');
-  const [host,setHost] = useState(''), [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
+  const [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
@@ -74,7 +74,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        const targets=selectedHosts.length?selectedHosts:(host?[host]:[]);
+        const targets=selectedHosts;
         const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
         for(const hostId of targets){
           try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
