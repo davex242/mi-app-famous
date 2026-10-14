@@ -33,6 +33,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [notice,setNotice] = useState('');
   const [hostSearch,setHostSearch] = useState('');
   const [recruiterFilter,setRecruiterFilter] = useState('');
+  const [batchLimit,setBatchLimit] = useState(25);
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
     return () => {mounted.current=false;if(!sharedApi)void client.logout();};}, [sharedApi]);
@@ -80,17 +81,17 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        const targets=[...new Set(selectedHosts)].filter(id=>workspace.trainees.some(row=>value(row,'host_id')===id));
+        const targets=[...new Set(selectedHosts)].filter(id=>workspace.trainees.some(row=>value(row,'host_id')===id)).slice(0,batchLimit);
         const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
-        const remaining:string[]=[];
+        const remaining:string[]=[...selectedHosts.filter(id=>!targets.includes(id))];
         for(const hostId of targets){
           if(workspace.enrollments.some(row=>row.host_id===hostId&&row.program_version_id===program&&row.status==='active')){outcomes.push({hostId,ok:false,message:'Ya tiene una inscripción activa en este programa'});continue;}
           try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
           catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;outcomes.push({hostId,ok:false,message:reason instanceof LocalTrainingError?reason.message:'No se pudo inscribir'});remaining.push(hostId);}
         }
         setBatchResults(outcomes);setSelectedHosts(remaining);await refresh();
-        if(mounted.current)setNotice(`Inscripciones: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} pendientes de revisión.`);
-      });}}><h3>Inscribir emisores</h3>
+        if(mounted.current)setNotice(`Lote procesado: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} fallidas; ${remaining.length} emisores conservados en la selección.`);
+      });}}><h3>Inscribir emisores por lotes</h3><label>Máximo por lote<select aria-label="Tamaño del lote" value={batchLimit} onChange={e=>setBatchLimit(Number(e.target.value))} disabled={busy}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><p>Para evitar bloqueos, se procesan hasta {batchLimit} emisores por operación. Los restantes continúan seleccionados para el siguiente lote.</p>
         <p role="note">Origen actual: catálogo de capacitación ({hosted?'preview separado':'entorno local'}). Aún no está conectado al padrón oficial de emisores registrados ni a su reclutador. No uses esta lista como validación de pertenencia a la agencia.</p>
         <label>Buscar emisor por nombre o ID de MICO<input aria-label="Buscar emisor registrado" value={hostSearch} onChange={event=>setHostSearch(event.target.value)} placeholder="Nombre o ID" disabled={busy}/></label>
         <label>Filtrar por reclutador<select aria-label="Filtrar por reclutador" value={recruiterFilter} onChange={event=>setRecruiterFilter(event.target.value)} disabled={busy||!recruiters.length}><option value="">Todos los reclutadores disponibles</option>{recruiters.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
