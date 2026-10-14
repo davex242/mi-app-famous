@@ -32,6 +32,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
   const [hostSearch,setHostSearch] = useState('');
+  const [recruiterFilter,setRecruiterFilter] = useState('');
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
     return () => {mounted.current=false;if(!sharedApi)void client.logout();};}, [sharedApi]);
@@ -47,7 +48,9 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const hostLabel=(id:unknown)=>{const trainee=workspace?.trainees.find(row=>row.host_id===id);return trainee?value(trainee,'label'):'Emisor DEMO';};
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
   const enrolledHostIds=new Set((workspace?.enrollments??[]).filter(row=>row.status==='active').map(row=>String(row.host_id)));
-  const visibleTrainees=(workspace?.trainees??[]).filter(row=>[value(row,'label'),value(row,'mico_id'),value(row,'host_id')].some(part=>part.toLocaleLowerCase().includes(hostSearch.trim().toLocaleLowerCase())));
+  const recruiterOf=(row:PublicRow)=>typeof row.reclutador==='string'?row.reclutador:typeof row.original_recruiter==='string'?row.original_recruiter:'';
+  const recruiters=[...new Set((workspace?.trainees??[]).map(recruiterOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const visibleTrainees=(workspace?.trainees??[]).filter(row=>(!recruiterFilter||recruiterOf(row)===recruiterFilter)&&[value(row,'label'),value(row,'mico_id'),value(row,'host_id')].some(part=>part.toLocaleLowerCase().includes(hostSearch.trim().toLocaleLowerCase())));
   return <section className="training-demo td-local" aria-label="Training API local">
     <div className="td-notice"><strong>{hosted?'PREVIEW · Capacitación con datos persistentes':'PRUEBA LOCAL · API de entrenamiento'}</strong><p>{hosted?'Este módulo usa el Supabase separado de capacitación y una sesión propia verificada. Los registros existentes de la app continúan en su backend actual.':'Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.'}</p></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
@@ -90,6 +93,8 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       });}}><h3>Inscribir emisores</h3>
         <p role="note">Origen actual: catálogo de capacitación ({hosted?'preview separado':'entorno local'}). Aún no está conectado al padrón oficial de emisores registrados ni a su reclutador. No uses esta lista como validación de pertenencia a la agencia.</p>
         <label>Buscar emisor por nombre o ID de MICO<input aria-label="Buscar emisor registrado" value={hostSearch} onChange={event=>setHostSearch(event.target.value)} placeholder="Nombre o ID" disabled={busy}/></label>
+        <label>Filtrar por reclutador<select aria-label="Filtrar por reclutador" value={recruiterFilter} onChange={event=>setRecruiterFilter(event.target.value)} disabled={busy||!recruiters.length}><option value="">Todos los reclutadores disponibles</option>{recruiters.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
+        {!recruiters.length&&<p>El catálogo de capacitación todavía no incluye el reclutador original. El filtro se activará cuando la integración entregue ese dato verificado.</p>}
         <p>Selecciona uno o varios emisores. Cada inscripción se guarda por separado y conserva su historial individual. Los errores no cancelan las inscripciones correctas.</p>
         <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
           <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>[...new Set([...current,...visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—')])])}>Seleccionar todos los visibles</button>
