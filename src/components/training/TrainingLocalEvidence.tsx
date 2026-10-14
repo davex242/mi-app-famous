@@ -1,11 +1,13 @@
+import {preparePrivateImage} from './preparePrivateImage';
 import TrainingLocalAssessment from './TrainingLocalAssessment';
-import React, {useRef,useState} from 'react';
-import {LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
+import React, {useEffect,useRef,useState} from 'react';
+import {EvidencePreview,LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
 const labels:Record<string,string>={pending:'Pendiente',approved:'Aprobada',rejected:'Rechazada'};
 const MAX_BYTES=2*1024*1024;
 async function attachment(file:File) {
   if(!file.size||file.size>MAX_BYTES)throw Error('Invalid evidence file size');
+  if(['image/png','image/jpeg'].includes(file.type))return {image_base64:(await preparePrivateImage(file)).base64};
   const bytes=new Uint8Array(await file.arrayBuffer());
   let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
   const data=btoa(binary);
@@ -25,7 +27,16 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
   const [filter,setFilter]=useState(''),[sessionId,setSessionId]=useState(''),[description,setDescription]=useState('');
   const [file,setFile]=useState<File|null>(null),[consent,setConsent]=useState(false),[fileError,setFileError]=useState('');
   const [notes,setNotes]=useState<Record<string,string>>({}),[decisions,setDecisions]=useState<Record<string,string>>({});
-  const fileInput=useRef<HTMLInputElement>(null);
+  const fileInput=useRef<HTMLInputElement>(null),dialog=useRef<HTMLDialogElement>(null),video=useRef<HTMLVideoElement>(null);
+  const [preview,setPreview]=useState<{data:EvidencePreview;workspace:LocalWorkspace;videoUrl?:string}|null>(null);
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;};},[]);
+  const current=useRef({workspace,filter});current.current={workspace,filter};
+  useEffect(()=>{setPreview(null);},[workspace,filter]);
+  useEffect(()=>{const url=preview?.videoUrl,element=video.current;return ()=>{if(element){element.pause();element.removeAttribute('src');element.load();}if(url)URL.revokeObjectURL(url);};},[preview]);
+  useEffect(()=>{if(preview&&preview.workspace===workspace)dialog.current?.showModal();else dialog.current?.close();},[preview,workspace]);
+  function close(){video.current?.pause();setPreview(null);}
+  const data=preview?.workspace===workspace?preview.data:null;
   const admin=role==='superadmin'||role==='subadmin',readonly=role==='readonly';
   const active=(id:unknown)=>workspace.enrollments.some(row=>row.id===id&&row.status==='active');
   const sessionLabel=(id:unknown)=>{
@@ -37,6 +48,13 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
     {workspace.evidence.filter(row=>!filter||row.status===filter).map(row=><article className="td-panel td-local-proof" key={row.id} aria-label={`Evidencia ${row.id}`}>
       <h3>{sessionLabel(row.session_id)}</h3><p>{text(row,'description')}</p><p>Estado: <strong>{labels[text(row,'status')]}</strong></p>
       {!!row.storage_path&&<button disabled={busy} onClick={()=>void run(async()=>download(await api.downloadEvidence(row.id!)))}>Descargar archivo DEMO</button>}
+      {['.png','.mp4'].some(extension=>text(row,'storage_path').endsWith(extension))&&<button disabled={busy} onClick={()=>void run(async()=>{
+        const result=await api.previewEvidence(row.id!);
+        if(!mounted.current||current.current.workspace!==workspace||current.current.filter!==filter)return;
+        let videoUrl:string|undefined;
+        if(result.type==='video'){if(result.video.data.length>Math.ceil(MAX_BYTES/3)*4)throw Error('Invalid evidence file');const bytes=Uint8Array.from(atob(result.video.data),char=>char.charCodeAt(0));videoUrl=URL.createObjectURL(new Blob([bytes],{type:'video/mp4'}));}
+        setPreview({data:result,workspace,videoUrl});
+      })}>Vista previa de evidencia</button>}
       {!row.storage_path&&<p>Evidencia descriptiva sin archivo adjunto.</p>}
       {workspace.approvals.filter(approval=>approval.evidence_id===row.id&&approval.status!=='pending').map(approval=><p key={approval.id}>Revisión: {text(approval,'review_notes')}</p>)}
       {admin&&row.status==='pending'&&active(row.enrollment_id)&&<form onSubmit={event=>{event.preventDefault();void run(async()=>{
@@ -49,20 +67,26 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
     </article>)}
     {!workspace.evidence.some(row=>!filter||row.status===filter)&&<p>Sin evidencias para este filtro.</p>}
     {!readonly&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-      await api.submitEvidence({session_id:sessionId,description,...(file?{...await attachment(file),consent_confirmed:consent}:{})});
+      let prepared={};if(file){try{prepared=await attachment(file);}catch(e){setFileError(e instanceof Error?e.message:'No se pudo preparar el archivo.');return;}}
+      await api.submitEvidence({session_id:sessionId,description,...(file?{...prepared,consent_confirmed:consent}:{})});
       setDescription('');setFile(null);setConsent(false);if(fileInput.current)fileInput.current.value='';await refresh();notify('Evidencia DEMO enviada a revisión.');
     });}}><h3>Enviar evidencia DEMO</h3>
       <label>Sesión de evidencia<select aria-label="Sesión de evidencia" required value={sessionId} disabled={busy} onChange={e=>setSessionId(e.target.value)}><option value="">Selecciona una sesión activa</option>{workspace.sessions.filter(row=>active(row.enrollment_id)).map(row=><option key={row.id} value={row.id}>{sessionLabel(row.id)}</option>)}</select></label>
       <label>Descripción de evidencia<textarea aria-label="Descripción de evidencia" required maxLength={2000} disabled={busy} value={description} onChange={e=>setDescription(e.target.value)}/></label>
-      <label>Archivo DEMO opcional<input aria-label="Archivo DEMO opcional" ref={fileInput} type="file" accept="image/png,application/pdf,video/mp4" disabled={busy} onChange={e=>{
+      <label>Archivo DEMO opcional<input aria-label="Archivo DEMO opcional" ref={fileInput} type="file" accept="image/png,image/jpeg,application/pdf,video/mp4" disabled={busy} onChange={e=>{
         const next=e.target.files?.[0]??null;setConsent(false);setFileError('');setFile(null);
-        if(next&&(!next.size||next.size>MAX_BYTES||!['image/png','application/pdf','video/mp4'].includes(next.type))){setFileError('Elige un PNG, PDF o MP4 de hasta 2 MiB.');e.target.value='';return;}setFile(next);
+        if(next&&(!next.size||next.size>MAX_BYTES||!['image/png','image/jpeg','application/pdf','video/mp4'].includes(next.type))){setFileError('Elige un PNG/JPEG, PDF o MP4 de hasta 2 MiB.');e.target.value='';return;}setFile(next);
       }}/></label>
-      <p>Usa archivos ficticios: PNG, PDF estático o MP4 H.264, hasta 2 MiB. El servidor valida el contenido. La aprobación de evidencia no completa por sí sola una práctica.</p>
+      <p>Usa archivos ficticios: PNG/JPEG, PDF estático o MP4 H.264, hasta 2 MiB. JPEG se convierte a PNG de hasta 768 píxeles por lado, conservando sus proporciones. El servidor valida el contenido. La aprobación de evidencia no completa por sí sola una práctica.</p>
       {fileError&&<p role="alert">{fileError}</p>}
       {file&&<label className="td-weekday"><input aria-label="Confirmo uso de archivo ficticio" type="checkbox" required checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/>Confirmo que el archivo es ficticio y autorizado para esta prueba local.</label>}
       <button disabled={busy||!sessionId||!description.trim()||!!fileError||(!!file&&!consent)}>Enviar evidencia a revisión DEMO</button>
     </form>}
+    <dialog ref={dialog} aria-labelledby="tl-evidence-title" onCancel={close} onClose={close}><h3 id="tl-evidence-title">Evidencia DEMO</h3>
+      {data?.type==='image'&&<img alt="Evidencia de prueba" src={`data:image/png;base64,${data.image.data}`}/>}
+      {data?.type==='video'&&<video ref={video} controls preload="none" src={preview?.videoUrl}/>}
+      <button onClick={close}>Cerrar evidencia</button>
+    </dialog>
     <TrainingLocalAssessment api={api} workspace={workspace} role={role} busy={busy} run={run} refresh={refresh} notify={notify}/>
   </>;
 }

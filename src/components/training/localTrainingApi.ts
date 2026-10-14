@@ -1,3 +1,4 @@
+export type EvidencePreview={type:'image';image:{data:string}}|{type:'video';video:{data:string}};
 /** Local synthetic API only. The existing application's identity is never sent. */
 export function localTrainingEnabled() {
   return typeof window !== 'undefined' && window.location.protocol === 'http:' &&
@@ -99,6 +100,10 @@ export class LocalTrainingApi {
   async reviewEvidence(evidence_id:string,decision:string,notes:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/evidence/review',{evidence_id,decision,notes});
+  }
+  async previewEvidence(evidence_id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/evidence/file-preview',{evidence_id}) as EvidencePreview;
   }
   async downloadEvidence(evidence_id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
