@@ -24,6 +24,14 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
   const result=a=>({attempt_id:a.id,attempt_number:a.attempt_number,submitted_at:a.submitted_at,score_percent:Number(a.score_percent),passed:a.passed});
   return {
     examTemplate:(token,body)=>run(token,async(_,actor)=>{requireAdmin(actor);fields(body,[]);return {demo:true,questions:examTemplate()};}),
+    examEditData:(token,body)=>run(token,async(tx,actor)=>{
+      requireAdmin(actor);fields(body,['id']);
+      const exam=(await tx.query("select id,exam_key,version,pass_percent from public.training_exam_versions where id=$1 and status='published'",[uuid(body.id)])).rows[0];
+      if(!exam)fail(404,'Record unavailable');
+      const rows=(await tx.query('select q.prompt,q.options,k.correct_option from public.training_exam_questions q join training_private.training_exam_keys k on k.question_id=q.id where q.exam_version_id=$1 order by q.position',[exam.id])).rows;
+      if(rows.length!==50)fail(409,'Exam content is inconsistent');
+      return {...exam,pass_percent:Number(exam.pass_percent),questions:rows};
+    }),
     publishExam:(token,body)=>run(token,async(tx,actor)=>{
       requireAdmin(actor);fields(body,['exam_key','pass_percent','questions','source_id']);
       const key=text(body.exam_key,80);

@@ -23,6 +23,8 @@ export type MaterialPreview = {type:'text';content:string;title:string}|{type:'l
 export type MaterialDownload = {mime:string;content?:string;image_base64?:string;pdf_base64?:string;video_base64?:string};
 export type ClosingPreview={ready:boolean;preview_hash:string;program_version_id:string;program_title:string;program_version:number;progress:{completed_items:number;total_items:number;percent:number};checks:{day:number;ready:boolean;problems:string[]}[];quiz:{ready:boolean;score_percent:number|null;pass_percent:number|null};problems:string[]};
 export type ProgramUpdatePreview={from_version_id:string;to_version_id:string;from_version:number;to_version:number;changelog:string;total_items:number;preserved_completed_items:number;preserved_session_items:number;new_required_items:number;historical_only_items:number;previous_progress:{completed_items:number;total_items:number;percent:number};updated_percent:number;preview_hash:string};
+export type ExamQuestion={prompt:string;options:string[];correct_option:number};
+export type ExamEditData={id:string;exam_key:string;version:number;pass_percent:number;questions:ExamQuestion[]};
 export class LocalTrainingApi {
   private token: string | null = null;
   private verified = false;
@@ -164,6 +166,18 @@ export class LocalTrainingApi {
   async publishMaterial(id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/materials/publish',{id});
+  }
+  async examTemplate() {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/exams/template',{}) as {demo:true;questions:ExamQuestion[]};
+  }
+  async editExam(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/exams/edit-data',{id}) as ExamEditData;
+  }
+  async publishExam(body:{source_id?:string;exam_key:string;pass_percent:number;questions:ExamQuestion[]}) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/exams/publish',body);
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.

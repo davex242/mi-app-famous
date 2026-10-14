@@ -1,3 +1,4 @@
+import TrainingLocalExamEditor from './TrainingLocalExamEditor';
 import React,{useEffect,useState} from 'react';
 import {LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
@@ -12,7 +13,7 @@ export default function TrainingLocalQuizInvitations({api,workspace,role,busy,ru
   const label=(id:unknown)=>{const e=workspace.enrollments.find(row=>row.id===id),host=workspace.trainees.find(row=>row.host_id===e?.host_id);return host?text(host,'label'):'Emisor DEMO';};
   return <>
     <div className="td-table-scroll"><table><thead><tr><th>Examen publicado</th><th>Versión</th><th>Preguntas</th><th>Umbral</th></tr></thead><tbody>{workspace.exams.map(row=><tr key={row.id}><td>{text(row,'exam_key')}</td><td>{String(row.version)}</td><td>{String(row.question_count)}</td><td>{String(row.pass_percent)} %</td></tr>)}</tbody></table></div>
-    <p>Las preguntas y su calificación se entregan en la página de quiz existente. Esta vista no recibe respuestas correctas. Los enlaces generados aquí sirven solo en este servidor local.</p>
+    <p>Las preguntas y su calificación se entregan en la página de quiz existente. Las claves se administran solo en el editor autorizado; no se entregan al participante. Los enlaces generados aquí sirven solo en este servidor local.</p>
     {!readonly&&<form className="td-panel" onSubmit={event=>{event.preventDefault();if(!valid)return;setInvitation(null);void run(async()=>{
       const result=await api.issueExam(enrollmentId,examId,Number(attempts),new Date(expires).toISOString());
       if(!/^[A-Za-z0-9_-]{43}$/.test(result.invitation_token))throw Error('Invalid invitation');
@@ -30,5 +31,6 @@ export default function TrainingLocalQuizInvitations({api,workspace,role,busy,ru
       {!readonly&&!row.revoked_at&&row.status==='issued'&&<><button disabled={busy} onClick={()=>setRevokeId(row.id!)}>Revisar revocación DEMO</button>{revokeId===row.id&&<><p>Confirma que quieres invalidar este enlace de prueba.</p><button disabled={busy} onClick={()=>void run(async()=>{await api.revokeExam(row.id!);setInvitation(null);await refresh();notify('Invitación DEMO revocada.');})}>Confirmar revocación DEMO</button></>}</>}
     </article>)}
     {!workspace.exam_assignments.length&&<p>Aún no hay invitaciones de prueba.</p>}
+    {(role==='superadmin'||role==='subadmin')&&<TrainingLocalExamEditor api={api} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={notify}/>}
   </>;
 }
