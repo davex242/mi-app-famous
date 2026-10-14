@@ -11,9 +11,9 @@ async function attachment(file:File) {
   const bytes=new Uint8Array(await file.arrayBuffer());
   let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
   const data=btoa(binary);
-  if(file.type==='image/png')return {image_base64:data};
   if(file.type==='application/pdf')return {pdf_base64:data};
-  return {video_base64:data};
+  if(file.type==='video/mp4')return {video_base64:data};
+  throw Error('Formato no admitido. Usa PNG, JPG, JPEG, WebP, PDF o MP4.');
 }
 function download(file:{mime:string;image_base64?:string;pdf_base64?:string;video_base64?:string}) {
   const formats:Record<string,[string|undefined,string]>={'image/png':[file.image_base64,'png'],'application/pdf':[file.pdf_base64,'pdf'],'video/mp4':[file.video_base64,'mp4']};
