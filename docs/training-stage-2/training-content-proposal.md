@@ -390,7 +390,7 @@ En la rama aislada, superadmin y subadmin pueden abrir **Biblioteca → Contenid
 
 Se prepararon 50 casos distintos: cuatro por tema en los días 1–8 y tres por tema en los días 9–14. Cada pregunta tiene cuatro opciones, respuesta propuesta y explicación de corrección. Dave aceptó el contenido para la versión inicial de prueba y confirmó 75 % de aprobación y 3 intentos iniciales; los adicionales necesitan preaprobación. Cada invitación vence 24 horas después de su emisión por el servidor.
 
-El repositorio GitHub es público. La revisión automática rechazó subir el banco con claves por riesgo de exposición. El banco se conserva como archivo privado de revisión, separado del repositorio. Ninguna pregunta, respuesta o explicación de corrección de ese banco se incluye en este cambio público, bundle, descarga de estudio ni endpoint. La integración de ese archivo con el editor se difiere hasta disponer de un destino privado apropiado. El banco DEMO anterior y los exámenes existentes no se sustituyen.
+El repositorio GitHub es público. La revisión automática rechazó subir el banco con claves por riesgo de exposición. El banco se conserva como archivo privado de revisión, separado del repositorio. Ninguna pregunta, respuesta o explicación de corrección de ese banco se incluye en este cambio público, bundle, descarga de estudio ni endpoint. El editor administrativo de la prueba local ahora permite validar un archivo JSON privado y cargarlo en memoria; la publicación local sigue siendo una acción separada. La integración privada de producción sigue pendiente. El banco DEMO anterior y los exámenes existentes no se sustituyen.
 
 ## Verificación
 
@@ -400,7 +400,7 @@ El banco privado se validó por separado: exactamente 50 IDs/enunciados distinto
 
 ## Revisión necesaria antes de usarlo como material oficial
 
-El contenido está aceptado para la versión inicial de prueba. La carga de los 14 temas/materiales y el programa como borradores ya está implementada en Biblioteca de la prueba local. Sigue pendiente la carga del banco privado y la publicación separada del catálogo. Las adaptaciones de datos propios de la agencia pueden hacerse mediante revisiones editables. Los enlaces nuevos vencerán a las 24 horas desde emisión, calculadas por servidor. La autorización previa y el control del cupo están implementados localmente. Este paso no asigna programas a emisores ni modifica main, el login, almacenamiento o DatabasePad/Vercel de producción.
+El contenido está aceptado para la versión inicial de prueba. La carga de los 14 temas/materiales y el programa como borradores ya está implementada en Biblioteca de la prueba local. La carga por archivo privado está implementada para la prueba local; quedan la revisión y la publicación separada del banco y del catálogo. Las adaptaciones de datos propios de la agencia pueden hacerse mediante revisiones editables. Los enlaces nuevos vencerán a las 24 horas desde emisión, calculadas por servidor. La autorización previa y el control del cupo están implementados localmente. Este paso no asigna programas a emisores ni modifica main, el login, almacenamiento o DatabasePad/Vercel de producción.
 
 ## Política confirmada por Dave — 2026-10-13
 
@@ -419,3 +419,11 @@ Solo superadmin y subadmin con sesión sintética verificada pueden usar **Bibli
 El servidor utiliza la misma fuente pública de estudio que la interfaz. No recibe contenido editable, cantidades ni IDs del navegador: solo el hash esperado y la confirmación. Crea atómicamente 14 temas, 14 documentos de texto con vista previa/descarga y un programa de 14 días con 14 prácticas, todas con evidencia/evaluación obligatorias y referencias exactas a sus revisiones. Todo permanece en borrador. Se registra quién cargó la fuente, su hash y las referencias.
 
 Repetir o reiniciar la carga devuelve el programa original; no duplica datos ni reemplaza ediciones. Un error durante la carga revierte toda la operación. Publicar continúa por acciones separadas: primero temas, luego materiales, finalmente programa. La carga no crea exámenes, no asigna emisores ni actualiza entrenamientos en curso. El banco de respuestas permanece separado.
+
+## Banco privado desde archivo — editor local
+
+En **Quiz final → Editor administrativo de exámenes**, una sesión superadmin/subadmin verificada puede seleccionar el JSON privado (máximo 1 MiB). La validación ocurre íntegramente en el navegador: 50 preguntas únicas, IDs distintos, cobertura de las 14 unidades, opciones distintas, respuestas válidas, motivos de revisión y aceptación para pruebas. Exige la política confirmada 75 %, 3 intentos, extras preaprobados y 24 horas. El archivo no puede sustituirla.
+
+Validar presenta cantidades y política, sin reemplazar ni publicar el borrador. **Cargar archivo validado en el editor** reemplaza el borrador únicamente en memoria y fija el umbral en 75 %. Preguntas, claves y motivos pueden revisarse; editar una pregunta descarta su motivo anterior. Otra fuente, descarte, publicación, cierre de sesión o desmontaje del editor elimina el banco de la pantalla. Actualizar datos invalida la vista previa y bloquea la publicación del borrador anterior hasta recargarlo; una lectura de archivo tardía no puede restaurarlo.
+
+La confirmación de publicación existente sigue siendo obligatoria. Solo entonces se envían preguntas y claves al servidor local, que comprueba nuevamente estructura y rol y guarda las claves en su tabla privada; los motivos editoriales no se envían ni guardan. Ningún banco importado se guarda en localStorage/sessionStorage ni en código fuente. Las pruebas públicas usan exclusivamente datos sintéticos. No se modifica main ni se publica el archivo privado en GitHub o Vercel.

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --expose-gc --test --test-concurrency=1 isolation.test.mjs api.test.mjs catalogue.test.mjs accepted-course.test.mjs images.test.mjs evidence-files.test.mjs evidence-pdfs.test.mjs evidence-videos.test.mjs pdfs.test.mjs videos.test.mjs image-input.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs exam-attempts.test.mjs closing.test.mjs closing-export.test.mjs legacy-inspection.test.mjs && node --expose-gc --test --test-concurrency=1 persistence.test.mjs closing-persistence.test.mjs local-upgrade.test.mjs",
+    "test": "node --expose-gc --test --test-concurrency=1 private-exam-import.test.mjs isolation.test.mjs api.test.mjs catalogue.test.mjs accepted-course.test.mjs images.test.mjs evidence-files.test.mjs evidence-pdfs.test.mjs evidence-videos.test.mjs pdfs.test.mjs videos.test.mjs image-input.test.mjs programs.test.mjs updates.test.mjs exams.test.mjs exam-attempts.test.mjs closing.test.mjs closing-export.test.mjs legacy-inspection.test.mjs && node --expose-gc --test --test-concurrency=1 persistence.test.mjs closing-persistence.test.mjs local-upgrade.test.mjs",
     "test:ui": "node --test --test-concurrency=1 ui.test.mjs exams-ui.test.mjs persistence-ui.test.mjs closing-ui.test.mjs images-ui.test.mjs evidence-files-ui.test.mjs evidence-pdfs-ui.test.mjs evidence-videos-ui.test.mjs jpeg-ui.test.mjs pdfs-ui.test.mjs videos-ui.test.mjs",
     "start": "node server.mjs",
     "start:persistent": "node local-runtime.mjs start",
@@ -23,7 +23,8 @@
     "test:attempt-policy": "node --expose-gc --test --test-concurrency=1 exam-attempts.test.mjs",
     "test:react-attempt-approvals": "node react-attempt-approvals-ui.test.mjs",
     "test:accepted-course": "node --expose-gc --test --test-concurrency=1 accepted-course.test.mjs",
-    "test:react-catalogue-import": "node react-catalogue-import-ui.test.mjs"
+    "test:react-catalogue-import": "node react-catalogue-import-ui.test.mjs",
+    "test:private-exam-import": "node private-exam-import.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",
