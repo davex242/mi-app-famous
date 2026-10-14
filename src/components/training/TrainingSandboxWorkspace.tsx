@@ -46,6 +46,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const workspace=data?.workspace, readonly=data?.actor.role==='readonly';
   const hostLabel=(id:unknown)=>{const trainee=workspace?.trainees.find(row=>row.host_id===id);return trainee?value(trainee,'label'):'Emisor DEMO';};
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
+  const enrolledHostIds=new Set((workspace?.enrollments??[]).filter(row=>row.status==='active').map(row=>String(row.host_id)));
   const visibleTrainees=(workspace?.trainees??[]).filter(row=>[value(row,'label'),value(row,'mico_id'),value(row,'host_id')].some(part=>part.toLocaleLowerCase().includes(hostSearch.trim().toLocaleLowerCase())));
   return <section className="training-demo td-local" aria-label="Training API local">
     <div className="td-notice"><strong>{hosted?'PREVIEW · Capacitación con datos persistentes':'PRUEBA LOCAL · API de entrenamiento'}</strong><p>{hosted?'Este módulo usa el Supabase separado de capacitación y una sesión propia verificada. Los registros existentes de la app continúan en su backend actual.':'Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.'}</p></div>
@@ -78,11 +79,13 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         const targets=[...new Set(selectedHosts)].filter(id=>workspace.trainees.some(row=>value(row,'host_id')===id));
         const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
+        const remaining:string[]=[];
         for(const hostId of targets){
+          if(workspace.enrollments.some(row=>row.host_id===hostId&&row.program_version_id===program&&row.status==='active')){outcomes.push({hostId,ok:false,message:'Ya tiene una inscripción activa en este programa'});continue;}
           try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
-          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;outcomes.push({hostId,ok:false,message:reason instanceof LocalTrainingError?reason.message:'No se pudo inscribir'});}
+          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;outcomes.push({hostId,ok:false,message:reason instanceof LocalTrainingError?reason.message:'No se pudo inscribir'});remaining.push(hostId);}
         }
-        setBatchResults(outcomes);await refresh();
+        setBatchResults(outcomes);setSelectedHosts(remaining);await refresh();
         if(mounted.current)setNotice(`Inscripciones: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} pendientes de revisión.`);
       });}}><h3>Inscribir emisores</h3>
         <p role="note">Origen actual: catálogo de capacitación ({hosted?'preview separado':'entorno local'}). Aún no está conectado al padrón oficial de emisores registrados ni a su reclutador. No uses esta lista como validación de pertenencia a la agencia.</p>
@@ -91,7 +94,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
         <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
           <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>[...new Set([...current,...visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—')])])}>Seleccionar todos los visibles</button>
           <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>current.filter(id=>!visibleTrainees.some(row=>value(row,'host_id')===id)))}>Quitar visibles</button><button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar toda la selección</button>
-          {visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/>{value(row,'label')}</label>;})}
+          {visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/ >{value(row,'label')} {enrolledHostIds.has(id)?'· Ya tiene capacitación activa':''}</label>;})}
         </fieldset>
         <label>Programa publicado<select aria-label="Programa publicado" required value={program} onChange={e=>setProgram(e.target.value)} disabled={busy}><option value="">Selecciona un programa</option>{workspace.program_versions.filter(row=>row.status==='published').map(row=><option key={row.id} value={row.id}>{value(row,'title')} · v{value(row,'version')}</option>)}</select></label>
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
