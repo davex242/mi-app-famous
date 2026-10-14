@@ -10,6 +10,7 @@ import TrainingLocalUpdates from './TrainingLocalUpdates';
 import TrainingLocalProgramEditor from './TrainingLocalProgramEditor';
 const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial'];
 const value = (row: PublicRow, key: string) => typeof row[key] === 'string' || typeof row[key] === 'number' ? String(row[key]) : '—';
+const statusLabels:Record<string,string>={active:'Activo',paused:'Pausado',completed:'Completado',cancelled:'Cancelado',draft:'Borrador',published:'Publicado',archived:'Archivado'};
 const columns: Record<string, {table: string; fields: [string,string][]}> = {
   Programas:{table:'program_versions',fields:[['title','Programa'],['version','Versión'],['status','Estado']]},
   Agenda:{table:'sessions',fields:[['scheduled_at','Fecha'],['duration_minutes','Minutos'],['status','Estado']]},
@@ -38,6 +39,7 @@ export default function TrainingSandboxWorkspace() {
   }
   async function refresh() {const next=await api.current.load(); if (mounted.current) setData(next);}
   const workspace=data?.workspace, readonly=data?.actor.role==='readonly';
+  const hostLabel=(id:unknown)=>{const trainee=workspace?.trainees.find(row=>row.host_id===id);return trainee?value(trainee,'label'):'Emisor DEMO';};
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
   return <section className="training-demo td-local" aria-label="Training API local">
     <div className="td-notice"><strong>PRUEBA LOCAL · API de entrenamiento</strong><p>Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.</p></div>
@@ -52,13 +54,13 @@ export default function TrainingSandboxWorkspace() {
       <div className="td-actions"><p>Permiso verificado por el servidor: <strong>{data.actor.role}</strong></p>
         <button disabled={busy} onClick={()=>void run(refresh)}>Actualizar datos</button>
         <button disabled={busy} onClick={()=>{setData(null);setPassword('');void run(()=>api.current.logout());}}>Salir de prueba</button></div>
-      <nav className="td-tabs" aria-label="Secciones de prueba">{sections.map(name=><button key={name} aria-current={section===name?'page':undefined} disabled={busy} onClick={()=>setSection(name)}>{name}</button>)}</nav>
+      <nav className="td-tabs" aria-label="Secciones de prueba">{sections.map(name=><button key={name} className={section===name?'td-active':undefined} aria-current={section===name?'page':undefined} disabled={busy} onClick={()=>setSection(name)}>{name}</button>)}</nav>
       <h2>{section}</h2>
       {section==='Resumen' && workspace && <>
         <div className="td-stats"><article className="td-panel">Emisores asignados: <strong>{workspace.trainees.length}</strong></article><article className="td-panel">Inscripciones: <strong>{workspace.enrollments.length}</strong></article><article className="td-panel">Sesiones: <strong>{workspace.sessions.length}</strong></article></div>
-        <h3>Inscripciones del entorno local</h3>{workspace.enrollments.length===0?<p>Aún no hay inscripciones.</p>:<ul>{workspace.enrollments.map(row=><li key={row.id}>{value(row,'host_id')} · {value(row,'status')} · {value(row,'timezone')}</li>)}</ul>}
+        <h3>Inscripciones del entorno local</h3>{workspace.enrollments.length===0?<p>Aún no hay inscripciones.</p>:<ul>{workspace.enrollments.map(row=><li key={row.id}>{hostLabel(row.host_id)} · {statusLabels[value(row,'status')]??value(row,'status')} · {value(row,'timezone')}</li>)}</ul>}
       </>}
-      {spec && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <div className="td-table-scroll"><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {spec && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <div className="td-table-scroll" role="region" aria-label={`${section}: tabla de registros`} tabIndex={0}><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{key==='status'?(statusLabels[value(row,key)]??value(row,key)):value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
       {section==='Agenda' && workspace && <TrainingLocalAgenda api={api.current} workspace={workspace} readonly={readonly} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Evidencias' && workspace && <TrainingLocalEvidence api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Biblioteca' && workspace && <TrainingLocalLibrary api={api.current} workspace={workspace} role={data.actor.role} refresh={refresh} notify={setNotice} busy={busy} run={run}/> }
@@ -74,7 +76,7 @@ export default function TrainingSandboxWorkspace() {
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
         <button disabled={busy || !host || !program}>Guardar inscripción DEMO</button>
       </form>}
-      {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <p>Esta etapa permite consultar datos, inscribir emisores y gestionar agenda, asistencia y evidencias locales. Las demás acciones se conectarán en los siguientes pasos.</p>}
+      {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <p>Cada inscripción conserva su versión del programa. Publicar una versión nueva permite revisarla después en Actualizaciones.</p>}
     </>}
   </section>;
 }

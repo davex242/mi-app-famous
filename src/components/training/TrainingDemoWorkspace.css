@@ -13,3 +13,11 @@
 .training-demo.td-local input,.training-demo.td-local select{box-sizing:border-box;min-width:0;max-width:100%}
 
 .training-demo.td-local .td-local-exam-question{border:1px solid #d8dce7;border-radius:10px;padding:12px;margin:10px 0;overflow-wrap:anywhere}.training-demo.td-local .td-local-exam-question summary{cursor:pointer;font-weight:600}
+
+/* Long descriptions and revision titles must wrap without hiding content. */
+.training-demo p,.training-demo label,.training-demo button{overflow-wrap:anywhere}
+.training-demo.td-local fieldset{min-width:0}
+.training-demo.td-local button{min-height:44px}
+.training-demo.td-local .td-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+.training-demo .td-table-scroll:focus-visible{outline:2px solid #a995ff;outline-offset:3px}
+@media(max-width:700px){.training-demo.td-local .td-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
