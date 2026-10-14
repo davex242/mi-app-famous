@@ -13,7 +13,8 @@
     "test:journey": "node --expose-gc --test --test-concurrency=1 journey-ui.test.mjs",
     "test:react-demo": "node react-demo-ui.test.mjs",
     "start:react-local": "node react-local-runtime.mjs",
-    "test:react-local": "node react-local-ui.test.mjs"
+    "test:react-local": "node react-local-ui.test.mjs",
+    "test:react-content": "node react-content-ui.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",

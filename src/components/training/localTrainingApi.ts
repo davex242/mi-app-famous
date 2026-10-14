@@ -145,6 +145,26 @@ export class LocalTrainingApi {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/program-updates/accept',{enrollment_id,to_version_id,expected_from_version_id,preview_hash});
   }
+  async saveTopic(body:{source_id?:string;title:string;description:string;category:string;estimated_minutes:number}) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/topics',body);
+  }
+  async publishTopic(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/topics/publish',{id});
+  }
+  async editMaterial(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/materials/edit-data',{id}) as PublicRow;
+  }
+  async saveTextMaterial(body:{source_id?:string;topic_id:string;title:string;kind:'document'|'link';content?:string;external_url?:string;allow_preview:boolean;allow_download:boolean}) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/materials',body);
+  }
+  async publishMaterial(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/materials/publish',{id});
+  }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.
     const token = this.token; this.clear();

@@ -1,5 +1,6 @@
+import TrainingLocalContentEditor from './TrainingLocalContentEditor';
 import React,{useEffect,useRef,useState} from 'react';
-import {LocalTrainingApi,LocalWorkspace,MaterialPreview,MaterialDownload,PublicRow} from './localTrainingApi';
+import {LocalActor,LocalTrainingApi,LocalWorkspace,MaterialPreview,MaterialDownload,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
 const normalized=(value:string)=>value.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();
 function bytes(data:string){if(data.length>Math.ceil(2*1024*1024/3)*4)throw Error('Invalid material size');return Uint8Array.from(atob(data),char=>char.charCodeAt(0));}
@@ -10,8 +11,8 @@ function download(file:MaterialDownload){
   else {const format=formats[file.mime];if(!format?.[0])throw Error('Invalid material');blob=new Blob([bytes(format[0])],{type:file.mime});extension=format[1];}
   const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`material-demo.${extension}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-type Props={api:LocalTrainingApi;workspace:LocalWorkspace;busy:boolean;run:(operation:()=>Promise<void>)=>Promise<void>};
-export default function TrainingLocalLibrary({api,workspace,busy,run}:Props){
+type Props={api:LocalTrainingApi;workspace:LocalWorkspace;role:LocalActor['role'];refresh:()=>Promise<void>;notify:(message:string)=>void;busy:boolean;run:(operation:()=>Promise<void>)=>Promise<void>};
+export default function TrainingLocalLibrary({api,workspace,role,refresh,notify,busy,run}:Props){
   const [search,setSearch]=useState(''),[topic,setTopic]=useState('');
   const [preview,setPreview]=useState<{data:MaterialPreview;workspace:LocalWorkspace;videoUrl?:string}|null>(null);
   const dialog=useRef<HTMLDialogElement>(null),video=useRef<HTMLVideoElement>(null);
@@ -41,5 +42,6 @@ export default function TrainingLocalLibrary({api,workspace,busy,run}:Props){
       {data?.type==='video'&&<video ref={video} controls preload="none" src={preview?.videoUrl}/>}
       <button onClick={close}>Cerrar material</button>
     </dialog>
+    {(role==='superadmin'||role==='subadmin')&&<TrainingLocalContentEditor api={api} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={notify}/>}
   </>;
 }
