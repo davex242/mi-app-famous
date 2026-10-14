@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
+import {LocalActor,LocalTrainingError,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
 const number=(row:PublicRow,key:string)=>typeof row[key]==='number'?row[key] as number:0;
 type Props={api:LocalTrainingApi;workspace:LocalWorkspace;role:LocalActor['role'];busy:boolean;run:(operation:()=>Promise<void>)=>Promise<void>;refresh:()=>Promise<void>;notify:(message:string)=>void};
@@ -7,6 +7,7 @@ export default function TrainingLocalAssessment({api,workspace,role,busy,run,ref
   const [sessionId,setSessionId]=useState(''),[score,setScore]=useState(''),[result,setResult]=useState(''),[notes,setNotes]=useState('');
   const [confirmation,setConfirmation]=useState<{workspace:LocalWorkspace;sessionId:string}|null>(null);
   const admin=role==='superadmin'||role==='subadmin';
+  const [batchSessions,setBatchSessions]=useState<string[]>([]),[batchResults,setBatchResults]=useState<{id:string;ok:boolean;message:string}[]>([]),[batchConfirmed,setBatchConfirmed]=useState(false);
   const active=(id:unknown)=>workspace.enrollments.some(row=>row.id===id&&row.status==='active');
   const latest=(session:PublicRow)=>workspace.assessments.filter(row=>row.enrollment_id===session.enrollment_id&&row.topic_id===session.topic_id).sort((a,b)=>text(b,'assessed_at').localeCompare(text(a,'assessed_at'))||text(b,'id').localeCompare(text(a,'id')))[0];
   const completed=(session:PublicRow)=>workspace.completions.some(row=>row.enrollment_id===session.enrollment_id&&(row.item_id===session.item_id||row.item_id===session.current_item_id));
@@ -41,6 +42,25 @@ export default function TrainingLocalAssessment({api,workspace,role,busy,run,ref
           <button disabled={busy||!ready||!confirmed} onClick={()=>void run(async()=>{setConfirmation(null);await api.completePractice(sessionId);await refresh();notify('Práctica DEMO validada. El entrenamiento sigue sujeto a sus requisitos de cierre.');})}>Validar práctica DEMO</button>
         </article>
       </>}
+      <article className="td-panel"><h4>Validación de varias prácticas</h4>
+        <p>Solo se muestran prácticas con evidencia y evaluación aprobadas cuando corresponda. Esta operación confirma validaciones existentes, no asigna calificaciones ni sustituye los cuestionarios individuales.</p>
+        <fieldset disabled={busy}><legend>Prácticas para validar ({batchSessions.length})</legend>
+          {workspace.sessions.filter(session=>{
+            if(!active(session.enrollment_id)||completed(session))return false;
+            const requirement=workspace.program_items.find(row=>row.id===session.item_id);
+            const evidence=workspace.evidence.some(row=>row.session_id===session.id&&row.status==='approved');
+            return !!requirement&&(!requirement.evidence_required||evidence)&&(!requirement.assessment_required||latest(session)?.passed===true);
+          }).map(session=><label key={session.id} className="td-weekday"><input type="checkbox" checked={batchSessions.includes(session.id!)} onChange={event=>{setBatchConfirmed(false);setBatchSessions(current=>event.target.checked?[...current,session.id!]:current.filter(id=>id!==session.id));}}/>{label(session)}</label>)}
+        </fieldset>
+        <label className="td-weekday"><input type="checkbox" disabled={busy||!batchSessions.length} checked={batchConfirmed} onChange={event=>setBatchConfirmed(event.target.checked)}/>Confirmo que revisé los requisitos de las prácticas seleccionadas.</label>
+        <button disabled={busy||!batchConfirmed||!batchSessions.length} onClick={()=>void run(async()=>{
+          const results:{id:string;ok:boolean;message:string}[]=[];
+          for(const id of batchSessions){try{await api.completePractice(id);results.push({id,ok:true,message:'Validada'});}
+          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo validar'});}}
+          setBatchResults(results);setBatchSessions([]);setBatchConfirmed(false);await refresh();notify(`Validaciones: ${results.filter(row=>row.ok).length} correctas, ${results.filter(row=>!row.ok).length} fallidas.`);
+        })}>Validar {batchSessions.length} práctica(s)</button>
+        {!!batchResults.length&&<ul role="status">{batchResults.map(row=><li key={row.id}>{label(workspace.sessions.find(session=>session.id===row.id)??({} as PublicRow))}: {row.message}</li>)}</ul>}
+      </article>
       {selected&&completed(selected)&&<p>Esta práctica ya está validada.</p>}
     </>}
   </section>;
