@@ -31,6 +31,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [username,setUsername] = useState(hosted?defaultEmail:''), [password,setPassword] = useState('');
   const [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
+  const [hostSearch,setHostSearch] = useState('');
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
     return () => {mounted.current=false;if(!sharedApi)void client.logout();};}, [sharedApi]);
@@ -45,6 +46,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const workspace=data?.workspace, readonly=data?.actor.role==='readonly';
   const hostLabel=(id:unknown)=>{const trainee=workspace?.trainees.find(row=>row.host_id===id);return trainee?value(trainee,'label'):'Emisor DEMO';};
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
+  const visibleTrainees=(workspace?.trainees??[]).filter(row=>[value(row,'label'),value(row,'mico_id'),value(row,'host_id')].some(part=>part.toLocaleLowerCase().includes(hostSearch.trim().toLocaleLowerCase())));
   return <section className="training-demo td-local" aria-label="Training API local">
     <div className="td-notice"><strong>{hosted?'PREVIEW · Capacitación con datos persistentes':'PRUEBA LOCAL · API de entrenamiento'}</strong><p>{hosted?'Este módulo usa el Supabase separado de capacitación y una sesión propia verificada. Los registros existentes de la app continúan en su backend actual.':'Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.'}</p></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
@@ -83,11 +85,13 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
         setBatchResults(outcomes);await refresh();
         if(mounted.current)setNotice(`Inscripciones: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} pendientes de revisión.`);
       });}}><h3>Inscribir emisores</h3>
+        <p role="note">Origen actual: catálogo de capacitación ({hosted?'preview separado':'entorno local'}). Aún no está conectado al padrón oficial de emisores registrados ni a su reclutador. No uses esta lista como validación de pertenencia a la agencia.</p>
+        <label>Buscar emisor por nombre o ID de MICO<input aria-label="Buscar emisor registrado" value={hostSearch} onChange={event=>setHostSearch(event.target.value)} placeholder="Nombre o ID" disabled={busy}/></label>
         <p>Selecciona uno o varios emisores. Cada inscripción se guarda por separado y conserva su historial individual. Los errores no cancelan las inscripciones correctas.</p>
         <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
-          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(workspace.trainees.map(row=>value(row,'host_id')).filter(id=>id!=='—'))}>Seleccionar todos los visibles</button>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—'))}>Seleccionar todos los visibles</button>
           <button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar selección</button>
-          {workspace.trainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/>{value(row,'label')}</label>;})}
+          {visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/>{value(row,'label')}</label>;})}
         </fieldset>
         <label>Programa publicado<select aria-label="Programa publicado" required value={program} onChange={e=>setProgram(e.target.value)} disabled={busy}><option value="">Selecciona un programa</option>{workspace.program_versions.filter(row=>row.status==='published').map(row=><option key={row.id} value={row.id}>{value(row,'title')} · v{value(row,'version')}</option>)}</select></label>
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
