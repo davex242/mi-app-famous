@@ -8,7 +8,7 @@ export default async function handler(req,res){
  if(!/^\/(health|api\/[a-z/-]+)$/.test(path)||!['GET','POST'].includes(req.method)){res.statusCode=404;return res.end();}
  if(req.headers.origin&&req.headers.origin!==`https://${req.headers.host}`){res.statusCode=403;return res.end();}
  try{
-  const auth=req.headers.authorization;
+  const auth=req.headers['x-training-authorization'];
   if(path!=='/health'&&(typeof auth!=='string'||auth.length>8200)){res.statusCode=401;return res.end(JSON.stringify({error:'Verified session required'}));}
   let body;if(req.method==='POST'){
    if(req.body!==undefined){body=typeof req.body==='string'?req.body:JSON.stringify(req.body);}

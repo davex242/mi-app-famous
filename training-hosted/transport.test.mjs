@@ -20,7 +20,8 @@ try {
       assert.equal(options.credentials,'same-origin');
       assert.equal(options.redirect,'error');
       if(url.endsWith('/health'))return {ok:true,json:async()=>({storage:'hosted-preview',initialized:true})};
-      assert.equal(options.headers.Authorization,'Bearer synthetic.training.token');
+      assert.equal(options.headers['X-Training-Authorization'],'Bearer synthetic.training.token');
+      assert.equal(options.headers.Authorization,undefined);
       if(url.endsWith('/api/me'))return {ok:true,json:async()=>({sandbox:true,role:'superadmin'})};
       return {ok:true,json:async()=>({sandbox:true,...Object.fromEntries(['trainees','topics','materials','program_versions','program_items','program_materials','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','closing_records','exams','exam_assignments','exam_attempts','exam_attempt_budgets','events','progress'].map(key=>[key,[]]))})};
     }
