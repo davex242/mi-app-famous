@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {AgendaParameters,AgendaPreview,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
+import {AgendaParameters,AgendaPreview,LocalTrainingApi,LocalTrainingError,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
 const attendanceLabels:Record<string,string>={present:'Presente',absent:'Ausente',late:'Tarde',excused:'Justificada'};
 function localDate(instant:string,zone:string){try{return new Intl.DateTimeFormat('es-CR',{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(new Date(instant));}catch{return 'Fecha no disponible';}}
@@ -54,7 +54,7 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
         for(const id of batchSessions.filter(id=>eligibleSessions.some(row=>row.id===id))){
           const record=workspace.attendance.find(row=>row.session_id===id);
           try{await api.attendance(id,batchAttendance,record?text(record,'recorded_at'):null);results.push({id,ok:true,message:'Guardada'});}
-          catch(reason){if(reason instanceof Error&&/401|403/.test(reason.message))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo registrar'});}
+          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo registrar'});}
         }
         setBatchResults(results);await refresh();notify(`Asistencia masiva: ${results.filter(row=>row.ok).length} guardadas, ${results.filter(row=>!row.ok).length} fallidas.`);
       });}}><h3>Registrar asistencia de varios emisores</h3>
@@ -66,7 +66,7 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
         </fieldset>
         <label>Estado de asistencia<select aria-label="Estado de asistencia masiva" required disabled={busy} value={batchAttendance} onChange={e=>setBatchAttendance(e.target.value)}><option value="">Selecciona un estado</option>{Object.entries(attendanceLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
         <button disabled={busy||!batchSessions.some(id=>eligibleSessions.some(row=>row.id===id))||!batchAttendance}>Guardar asistencia de {batchSessions.length} sesiones</button>
-        {!!batchResults.length&&<div role="status"><h4>Resultados por sesión</h4><ul>{batchResults.map(row=><li key={row.id}>{sessionLabel(workspace.sessions.find(s=>s.id===row.id)??{} as PublicRow)}: {row.message}</li>)}</ul></div>}
+        {!!batchResults.length&&<div role="status"><h4>Resultados por sesión</h4><ul>{batchResults.map(row=><li key={row.id}>{sessionLabel(workspace.sessions.find(s=>s.id===row.id)??({} as PublicRow))}: {row.message}</li>)}</ul></div>}
       </form>
       {selected&&writable&&selected.status!=='completed'&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.reschedule(sessionId,newDate,newTime,text(selected,'scheduled_at'),reason);await refresh();notify('Sesión DEMO reprogramada.');
