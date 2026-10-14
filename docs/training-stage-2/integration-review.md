@@ -71,3 +71,7 @@ Consultadas el 13 de octubre de 2026, para orientar el diseño; no prueban compa
 - [Supabase: validación de usuario y clientes de servidor](https://supabase.com/docs/guides/auth/server-side/creating-a-client).
 - [Supabase: RLS y autorización por fila](https://supabase.com/docs/guides/database/postgres/row-level-security).
 - [Changelog Supabase](https://supabase.com/changelog). La lectura de `changelog.md` falló por el tipo de contenido del recuperador; se consultó la versión HTML. No se instaló ni actualizó SDK/CLI ni se eligió un framework de servidor en esta revisión.
+
+## Subsequent isolated work — identity contract
+
+The above report describes its historical three-practice review. The React local module and accepted fourteen-day course have since been exercised end-to-end; see `accepted-course-journey.md`. A server-only identity/assignment adapter is now prepared and validated by 52 synthetic checks; see `identity-adapter-contract.md`. It verifies the contract boundaries, explicit legacy-to-canonical mappings, profile MICO separation and current-role/assignment projection. No actual provider, verified hosted session, mapping data or hosted route was enabled. Production identity and effective backend permissions are still pending verification.
