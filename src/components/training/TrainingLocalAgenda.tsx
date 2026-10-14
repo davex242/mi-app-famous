@@ -9,6 +9,7 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
   const [weekdays,setWeekdays]=useState([1,2,3,4,5,6,7]);
   const [preview,setPreview]=useState<{result:AgendaPreview;parameters:AgendaParameters;workspace:LocalWorkspace}|null>(null);
   const [sessionId,setSessionId]=useState(''),[attendance,setAttendance]=useState('');
+  const [confirmAbsent,setConfirmAbsent]=useState(false),[confirmBatchAbsent,setConfirmBatchAbsent]=useState(false);
   const [batchSessions,setBatchSessions]=useState<string[]>([]),[batchAttendance,setBatchAttendance]=useState(''),[batchResults,setBatchResults]=useState<{id:string;ok:boolean;message:string}[]>([]);
   const [newDate,setNewDate]=useState(''),[newTime,setNewTime]=useState(''),[reason,setReason]=useState('');
   const active=workspace.enrollments.filter(row=>row.status==='active');
@@ -17,6 +18,7 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
   const selected=workspace.sessions.find(row=>row.id===sessionId);
   const selectedEnrollment=workspace.enrollments.find(row=>row.id===selected?.enrollment_id);
   const writable=selectedEnrollment?.status==='active';
+  const unresolved=eligibleSessions.filter(row=>!workspace.attendance.some(record=>record.session_id===row.id));
   const validPreview=preview?.workspace===workspace?preview:null;
   const name=(row:PublicRow)=>text(workspace.trainees.find(t=>t.host_id===row.host_id)??{},'label') || 'Emisor DEMO';
   const sessionLabel=(row:PublicRow)=>{const e=workspace.enrollments.find(e=>e.id===row.enrollment_id);return `${e?name(e):'Emisor DEMO'} · ${localDate(text(row,'scheduled_at'),e?text(e,'timezone'):'UTC')}`;};
@@ -26,6 +28,8 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
       return <tr key={row.id}><td>{sessionLabel(row)}</td><td>{e?text(e,'timezone'):'—'}</td><td>{text(row,'status')}</td><td>{record?attendanceLabels[text(record,'status')]:'Sin registrar'}</td></tr>;
     })}</tbody></table>{!workspace.sessions.length&&<p>Aún no hay sesiones de prueba.</p>}</div>
     {!readonly && <>
+      {unresolved.length>0&&<section className="td-panel"><h3>Asistencias pendientes de revisión</h3><p>{unresolved.length} sesiones no tienen asistencia registrada. Antes de marcar ausencia o excluir del programa, el entrenador debe verificar si falta registrar asistencia. Una ausencia no excluye automáticamente ni cancela la inscripción.</p><ul>{unresolved.slice(0,50).map(row=><li key={row.id}>{sessionLabel(row)} · Sin registrar</li>)}</ul>{unresolved.length>50&&<p>Se muestran las primeras 50 sesiones pendientes.</p>}</section>}
+
       <form className="td-panel" onSubmit={event=>{event.preventDefault();setPreview(null);void run(async()=>{
         const parameters={enrollment_id:enrollmentId,start_date:start,local_time:time,weekdays};
         const result=await api.previewAgenda(parameters);setPreview({result,parameters,workspace});
@@ -43,20 +47,21 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
         })}>Confirmar creación de sesiones DEMO</button></article>}
       <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         const record=workspace.attendance.find(row=>row.session_id===sessionId);
-        await api.attendance(sessionId,attendance,record?text(record,'recorded_at'):null);await refresh();notify('Asistencia DEMO guardada.');
+        if(attendance==='absent'&&!confirmAbsent)throw new Error('Confirma que revisaste la asistencia antes de registrar la ausencia.');await api.attendance(sessionId,attendance,record?text(record,'recorded_at'):null);setConfirmAbsent(false);await refresh();notify('Asistencia DEMO guardada.');
       });}}><h3>Registrar asistencia DEMO</h3>
         <label>Sesión de asistencia<select aria-label="Sesión de asistencia" required disabled={busy} value={sessionId} onChange={e=>{setSessionId(e.target.value);setAttendance('');setNewDate('');setNewTime('');setReason('');}}><option value="">Selecciona una sesión</option>{workspace.sessions.filter(row=>workspace.enrollments.some(e=>e.id===row.enrollment_id&&e.status==='active')).map(row=><option key={row.id} value={row.id}>{sessionLabel(row)}</option>)}</select></label>
         <label>Asistencia<select aria-label="Asistencia" required disabled={busy} value={attendance} onChange={e=>setAttendance(e.target.value)}><option value="">Selecciona un estado</option>{Object.entries(attendanceLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-        <button disabled={busy||!writable||!attendance}>Guardar asistencia DEMO</button>
+        {attendance==='absent'&&<label><input type="checkbox" checked={confirmAbsent} onChange={e=>setConfirmAbsent(e.target.checked)} disabled={busy}/>Confirmo que revisé el registro y que el emisor no asistió. Quedará pendiente de seguimiento, sin exclusión automática.</label>}
+        <button disabled={busy||!writable||!attendance||(attendance==='absent'&&!confirmAbsent)}>Guardar asistencia DEMO</button>
       </form>
       <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        const results:{id:string;ok:boolean;message:string}[]=[];
+        if(batchAttendance==='absent'&&!confirmBatchAbsent)throw new Error('Confirma la revisión de las ausencias antes de guardarlas.');const results:{id:string;ok:boolean;message:string}[]=[];
         for(const id of batchSessions.filter(id=>eligibleSessions.some(row=>row.id===id))){
           const record=workspace.attendance.find(row=>row.session_id===id);
           try{await api.attendance(id,batchAttendance,record?text(record,'recorded_at'):null);results.push({id,ok:true,message:'Guardada'});}
           catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo registrar'});}
         }
-        setBatchResults(results);await refresh();notify(`Asistencia masiva: ${results.filter(row=>row.ok).length} guardadas, ${results.filter(row=>!row.ok).length} fallidas.`);
+        setBatchResults(results);setConfirmBatchAbsent(false);await refresh();notify(`Asistencia masiva: ${results.filter(row=>row.ok).length} guardadas, ${results.filter(row=>!row.ok).length} fallidas.`);
       });}}><h3>Registrar asistencia de varios emisores</h3>
         <p>Selecciona las sesiones correspondientes. Cada registro conserva su emisor y sesión; una falla individual no reemplaza los demás resultados.</p>
         <fieldset disabled={busy}><legend>Sesiones seleccionadas: {batchSessions.length}</legend>
@@ -65,7 +70,8 @@ export default function TrainingLocalAgenda({api,workspace,readonly,busy,run,ref
           {eligibleSessions.map(row=><label key={row.id} className="td-weekday"><input type="checkbox" checked={batchSessions.includes(row.id!)} onChange={event=>setBatchSessions(current=>event.target.checked?[...current,row.id!]:current.filter(id=>id!==row.id))}/>{sessionLabel(row)}</label>)}
         </fieldset>
         <label>Estado de asistencia<select aria-label="Estado de asistencia masiva" required disabled={busy} value={batchAttendance} onChange={e=>setBatchAttendance(e.target.value)}><option value="">Selecciona un estado</option>{Object.entries(attendanceLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
-        <button disabled={busy||!batchSessions.some(id=>eligibleSessions.some(row=>row.id===id))||!batchAttendance}>Guardar asistencia de {batchSessions.length} sesiones</button>
+        {batchAttendance==='absent'&&<label><input type="checkbox" checked={confirmBatchAbsent} onChange={e=>setConfirmBatchAbsent(e.target.checked)} disabled={busy}/>Confirmo que revisé estas ausencias y que los emisores requieren seguimiento. No se excluirán automáticamente.</label>}
+        <button disabled={busy||!batchSessions.some(id=>eligibleSessions.some(row=>row.id===id))||!batchAttendance||(batchAttendance==='absent'&&!confirmBatchAbsent)}>Guardar asistencia de {batchSessions.length} sesiones</button>
         {!!batchResults.length&&<div role="status"><h4>Resultados por sesión</h4><ul>{batchResults.map(row=><li key={row.id}>{sessionLabel(workspace.sessions.find(s=>s.id===row.id)??({} as PublicRow))}: {row.message}</li>)}</ul></div>}
       </form>
       {selected&&writable&&selected.status!=='completed'&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
