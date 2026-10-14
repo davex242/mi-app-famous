@@ -16,7 +16,7 @@ Target: the separately verified training Supabase project and feature-branch Ver
 
 Fourteen topics, fourteen text guides and one fourteen-day program have been loaded as **drafts**, without hosts, assignments, enrollments, quiz versions or answer keys. A labelled preparation principal records the administrative seed; it is not an authenticated human account and has no runtime access.
 
-Automatic approval review rejected uploading the private bank and setting catalogue/exam rows to `published`: it considered explicit publication authorization outstanding. The rejection was respected. The safer draft-only transaction contains no quiz questions or keys. The original private JSON remains in the private review file. Official/persistent publication still needs the user's explicit approval and is not claimed complete.
+Automatic approval review rejected uploading the private bank and setting catalogue/exam rows to `published`: it considered explicit publication authorization outstanding. The rejection was respected. The safer draft-only transaction contains no quiz questions or keys. The original private JSON remains in the private review file. Publication was initially pending; the later explicit authorization and completed preview-only activation are recorded at the end of this document.
 
 The public `prepare-content.mjs` script generates a private transaction from an external reviewed JSON file. Default mode is draft-only. The explicit reviewed-publication mode is for a separately approved operation; it is not executed automatically and never adds the generated SQL or actual bank to Git.
 
@@ -74,6 +74,15 @@ After successful real browser training access, the user requested a single login
 
 In the hosted preview, a stored legacy profile alone no longer restores entry after refresh: the primary login is required again. Joint logout clears the shared training token and main UI session; account changes clear the old training client. Outside the hosted preview, the old login route remains active. Legacy `password_hash` values are removed from persisted/audited session profiles.
 
-This is one entry form with two backend validations, not a migration or a shared identity provider. Neither backend’s account credentials are changed. New/other users still need confirmed and approved training accounts. If passwords differ, this preview login reports that condition rather than changing either password. The first owner has confirmed browser access and active superadmin status. Publication and an actual enrollment journey remain pending.
+This is one entry form with two backend validations, not a migration or a shared identity provider. Neither backend’s account credentials are changed. New/other users still need confirmed and approved training accounts. If passwords differ, this preview login reports that condition rather than changing either password. The first owner has confirmed browser access and active superadmin status. The subsequent authorized preview publication is recorded below; the browser enrollment journey remains to be verified.
 
 Validation: unified-entry tests verify validation failures, current training-role isolation, session reuse without another password grant, joint logout, no password/session-token persistence and unchanged non-hosted provider behavior. Strict training TypeScript checks passed; the Vercel build verifies the full app.
+
+## Explicitly authorized preview publication
+
+The user explicitly authorized publication in the separate training Supabase only. A guarded atomic transaction published the accepted fourteen topics, fourteen text guides and fourteen-day program, and loaded/published one fifty-question private exam at 75%. Approval/audit records identify the owner’s authorization and the connected-assistant operation. The actual question bank and generated private SQL are excluded from Git.
+
+Remote counts verified 14 published topics, 14 published guides, one published program, 50 questions and 50 private keys. Direct authenticated SELECT of questions/keys remains denied. The existing policy still grants three initial attempts across the enrollment, requires preapproval for extras and generates invitations expiring 24 hours after issue.
+
+One clearly labelled synthetic host without a MICO/legacy ID is assigned to the verified owner and enrolled in the published program in America/Costa_Rica. No real host was imported or modified. No invitation or attempt was generated automatically; browser guide, practice, quiz and closing verification is the next step. Main, production and DatabasePad remain unchanged.
+
