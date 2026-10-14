@@ -3,7 +3,7 @@
 Estado: contrato de diseño, NO integración activa ni permiso para modificar producción.
 
 ## Fuente de verdad
-El selector actual consume `workspace.trainees`, que proviene del backend aislado de capacitación. La fuente oficial solicitada es la **base de datos de emisores registrados**, donde consta quién reclutó a cada emisor. No es la tabla de resultados de productividad. La aplicación principal configura DatabasePad en `src/lib/supabase.ts`; aún hay que verificar en lectura el esquema, claves, filtros y permisos efectivos de emisores registrados. No usar el Supabase de capacitación ni resultados como sustituto.
+El selector actual consume `workspace.trainees`, que proviene del backend aislado de capacitación. La fuente oficial solicitada es la tabla **`hosts` de DatabasePad**, donde consta quién reclutó a cada emisor. No es la tabla de resultados de productividad. **Localización confirmada en código:** `src/components/Dashboard.tsx` y `src/components/RecruiterPortal.tsx` consultan `.from('hosts').select('*')` mediante el cliente DatabasePad de `src/lib/supabase.ts`. El tipo `Host` en `src/types/index.ts` incluye `id`, `host_id` (ID MICO), `host_name`, `reclutador`, `rec_id`, `user_id`, `estado`, `real`, `created_at` y `updated_at`. El portal filtra por `.eq('reclutador', user?.name)`. No está confirmado que `rec_id` sea una clave de usuario fiable, ni que `user_id` represente al reclutador: verificar semántica real antes de vincular. Hay que verificar en lectura el esquema, claves, filtros y permisos efectivos de la tabla `hosts`. No usar el Supabase de capacitación ni resultados como sustituto.
 
 ## Contrato propuesto (solo lectura)
 Crear en el backend confiable un endpoint autenticado `GET /api/training/eligible-hosts?cursor=...` que lea el catálogo canónico de emisores registrados, con paginación, búsqueda por MICO ID/nombre de MICO y filtrado por asignaciones autorizadas. No debe aceptar roles ni scopes desde el navegador.
@@ -13,7 +13,7 @@ Campos de salida mínimos: `legacy_host_key` (opaco), `mico_id` (cadena, preserv
 Si un emisor aparece en el registro de emisores y no existe aún puente al entrenamiento, mostrar «Pendiente de vinculación» y bloquear inscripción hasta completar la vinculación por servidor. Los cambios de nombre en MICO no deben duplicar registros. La ausencia de resultados de productividad no debe excluir a un emisor registrado: la elegibilidad es una regla administrativa separada de la existencia del perfil. Conservar reclutador original como dato histórico y responsable actual como asignación mutable; no sobreescribir uno con otro.
 
 ## Condiciones antes de conectar
-1. Verificar en modo lectura la tabla de emisores registrados, su relación con el reclutador original y las asignaciones actuales, claves, unicidad de MICO ID, estatus, asignación y permisos efectivos.
+1. Verificar en modo lectura la tabla `hosts` de DatabasePad, la semántica de `reclutador`/`rec_id`/`user_id` y las asignaciones actuales, claves, unicidad de MICO ID, estatus, asignación y permisos efectivos.
 2. Resolver el login del usuario actual con sesión verificada en servidor; no confiar en `localStorage` ni roles de cliente.
 3. Definir cómo sincronizar altas, bajas, cambios de nombre, transferencia de agencia y reingresos; usar cursor/fecha de sincronización y reconciliación idempotente.
 4. Aplicar permisos de agencia, reclutador y administrador en cada lectura e inscripción; bloquear lectura cruzada y dobles inscripciones activas.
