@@ -76,7 +76,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        const targets=selectedHosts;
+        const targets=[...new Set(selectedHosts)].filter(id=>workspace.trainees.some(row=>value(row,'host_id')===id));
         const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
         for(const hostId of targets){
           try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
@@ -89,8 +89,8 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
         <label>Buscar emisor por nombre o ID de MICO<input aria-label="Buscar emisor registrado" value={hostSearch} onChange={event=>setHostSearch(event.target.value)} placeholder="Nombre o ID" disabled={busy}/></label>
         <p>Selecciona uno o varios emisores. Cada inscripción se guarda por separado y conserva su historial individual. Los errores no cancelan las inscripciones correctas.</p>
         <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
-          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—'))}>Seleccionar todos los visibles</button>
-          <button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar selección</button>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>[...new Set([...current,...visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—')])])}>Seleccionar todos los visibles</button>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>current.filter(id=>!visibleTrainees.some(row=>value(row,'host_id')===id)))}>Quitar visibles</button><button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar toda la selección</button>
           {visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/>{value(row,'label')}</label>;})}
         </fieldset>
         <label>Programa publicado<select aria-label="Programa publicado" required value={program} onChange={e=>setProgram(e.target.value)} disabled={busy}><option value="">Selecciona un programa</option>{workspace.program_versions.filter(row=>row.status==='published').map(row=><option key={row.id} value={row.id}>{value(row,'title')} · v{value(row,'version')}</option>)}</select></label>
