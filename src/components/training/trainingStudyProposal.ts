@@ -3,13 +3,14 @@ export const trainingContentProposal = {
   "key": "agencia-inicial-propuesta-v1",
   "title": "Formación inicial de emisores · Propuesta",
   "status": "draft",
-  "review_status": "pending_agency_review",
+  "review_status": "accepted_for_initial_testing",
   "duration_days": 14,
   "question_count": 50,
   "pass_percent": 75,
   "max_attempts": 3,
   "extra_attempts_require_preapproval": true,
   "expires_at": null,
+  "invitation_hours": 24,
   "units": [
     {
       "key": "bienvenida",
@@ -377,7 +378,6 @@ export const trainingContentProposal = {
     }
   ],
   "agency_decisions": [
-    "Vencimiento de las invitaciones al quiz.",
     "Canal de soporte y responsables de seguimiento.",
     "Horarios y adaptación de la duración por emisor.",
     "Metas, cuotas, premios y condiciones oficiales, si corresponden."

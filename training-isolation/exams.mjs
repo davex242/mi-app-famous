@@ -64,8 +64,9 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       requireWrite(actor);fields(body,['enrollment_id','exam_version_id','max_attempts','expires_at']);
       const e=await enrollment(tx,actor,body.enrollment_id);
       if(!Number.isInteger(body.max_attempts)||body.max_attempts<1||body.max_attempts>10)fail(400,'Explicit attempt limit required');
-      const expires=typeof body.expires_at==='string'&&/Z$/.test(body.expires_at)?Date.parse(body.expires_at):NaN;
-      if(!Number.isFinite(expires)||expires<=Date.now()||expires>Date.now()+30*86400000)fail(400,'Future expiry within 30 days required');
+      // Legacy callers may still send an expiry; validate it but never let it override the server policy.
+      if(body.expires_at!==undefined){const legacy=typeof body.expires_at==='string'&&/Z$/.test(body.expires_at)?Date.parse(body.expires_at):NaN;if(!Number.isFinite(legacy)||legacy<=Date.now()||legacy>Date.now()+30*86400000)fail(400,'Invalid legacy expiry');}
+      const expiresAt=new Date(Date.now()+24*60*60*1000).toISOString();
       const v=(await tx.query("select * from public.training_exam_versions where id=$1 and status='published' for share",[uuid(body.exam_version_id)])).rows[0];
       if(!v)fail(409,'Published exam required');
       const budget=await examAttemptBudget(tx,e.id);if(body.max_attempts>budget.total||budget.remaining===0)fail(409,'Prior approval for additional attempts required');
@@ -74,10 +75,10 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       if((await tx.query(`select a.id from public.training_exam_assignments a join training_private.training_exam_tokens t on t.assignment_id=a.id
         where a.enrollment_id=$1 and a.status='issued' and t.revoked_at is null and a.expires_at>now()`,[e.id])).rows.length)fail(409,'An invitation is already active');
       const a=(await tx.query(`insert into public.training_exam_assignments(exam_version_id,host_id,enrollment_id,status,expires_at,issued_by,max_attempts)
-        values($1,$2,$3,'issued',$4,$5,$6) returning *`,[v.id,e.host_id,e.id,body.expires_at,actor.app_user_id,body.max_attempts])).rows[0];
+        values($1,$2,$3,'issued',$4,$5,$6) returning *`,[v.id,e.host_id,e.id,expiresAt,actor.app_user_id,body.max_attempts])).rows[0];
       const invitation=randomBytes(32).toString('base64url');
       await tx.query('insert into training_private.training_exam_tokens(assignment_id,token_hash) values($1,$2)',[a.id,hash(invitation)]);
-      await audit(tx,actor,'exam_issued','exam_assignment',a.id,e.id,{exam_version_id:v.id,program_version_id:e.program_version_id,max_attempts:body.max_attempts});
+      await audit(tx,actor,'exam_issued','exam_assignment',a.id,e.id,{exam_version_id:v.id,program_version_id:e.program_version_id,max_attempts:body.max_attempts,invitation_hours:24,expires_at:expiresAt});
       return {assignment:a,invitation_token:invitation};
     }),
     revokeExam:(token,body)=>run(token,async(tx,actor)=>{

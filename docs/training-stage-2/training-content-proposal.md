@@ -1,6 +1,6 @@
 # Capacitación inicial de emisores — propuesta de contenido
 
-Borrador para revisión de Dave y los administradores. Programa flexible de 14 días; no publicado ni asignado. Las duraciones, actividades y criterios siguientes son propuestas editables, no reglas oficiales de MICO ni compromisos de resultados.
+Contenido aceptado por Dave para la primera versión de prueba el 2026-10-13. Programa flexible de 14 días; no publicado ni asignado. Las duraciones, actividades y criterios siguientes son propuestas editables, no reglas oficiales de MICO ni compromisos de resultados.
 
 Cada práctica requiere evidencia, evaluación y validación administrativa. La asistencia o la lectura del material no aprueban una práctica. El banco propuesto de 50 preguntas permanece en un módulo exclusivo de servidor, fuera del contenido de estudio público.
 
@@ -384,11 +384,11 @@ No se importó este contenido al catálogo ni se publicaron exámenes. Consultar
 
 ## Revisión desde la interfaz
 
-En la rama aislada, superadmin y subadmin pueden abrir **Biblioteca → Propuesta de capacitación · Borrador**, elegir cualquiera de los 14 días y descargar la guía completa en TXT. La guía es material público de estudio empaquetado con la interfaz; no contiene preguntas ni respuestas del examen. La visibilidad administrativa del panel no es una medida para proteger secretos.
+En la rama aislada, superadmin y subadmin pueden abrir **Biblioteca → Contenido de capacitación · Aceptado para prueba inicial**, elegir cualquiera de los 14 días y descargar la guía completa en TXT. La guía es material público de estudio empaquetado con la interfaz; no contiene preguntas ni respuestas del examen. La visibilidad administrativa del panel no es una medida para proteger secretos.
 
 ## Banco privado preparado por separado
 
-Se prepararon 50 casos distintos: cuatro por tema en los días 1–8 y tres por tema en los días 9–14. Cada pregunta tiene cuatro opciones, respuesta propuesta y explicación de corrección para revisión. Todas siguen pendientes de revisión de la agencia; Dave confirmó 75 % de aprobación y 3 intentos iniciales; los adicionales necesitan preaprobación. El vencimiento sigue sin definir.
+Se prepararon 50 casos distintos: cuatro por tema en los días 1–8 y tres por tema en los días 9–14. Cada pregunta tiene cuatro opciones, respuesta propuesta y explicación de corrección. Dave aceptó el contenido para la versión inicial de prueba y confirmó 75 % de aprobación y 3 intentos iniciales; los adicionales necesitan preaprobación. Cada invitación vence 24 horas después de su emisión por el servidor.
 
 El repositorio GitHub es público. La revisión automática rechazó subir el banco con claves por riesgo de exposición. El banco se conserva como archivo privado de revisión, separado del repositorio. Ninguna pregunta, respuesta o explicación de corrección de ese banco se incluye en este cambio público, bundle, descarga de estudio ni endpoint. La integración de ese archivo con el editor se difiere hasta disponer de un destino privado apropiado. El banco DEMO anterior y los exámenes existentes no se sustituyen.
 
@@ -396,14 +396,18 @@ El repositorio GitHub es público. La revisión automática rechazó subir el ba
 
 El recorrido DEMO ampliado verifica las 14 unidades, la descarga completa, el acceso visual administrativo y móvil de 320px, sin llamadas ni escrituras de backend. El recorrido local y TypeScript verifican la integración de la guía. La estructura del estudio conserva evidencia y evaluación obligatorias, y no inventa criterios del examen.
 
-El banco privado se validó por separado: exactamente 50 IDs/enunciados distintos; cobertura de los 14 temas; cuatro opciones distintas y una respuesta válida por pregunta; criterios de corrección completos; distribución de respuestas 12–13 por posición; estado pendiente de contenido. La política confirmada por Dave se registró posteriormente: 75 %, 3 intentos iniciales y preaprobación de los adicionales; vencimiento sin definir. No se publica en el repositorio para repetir esas comprobaciones.
+El banco privado se validó por separado: exactamente 50 IDs/enunciados distintos; cobertura de los 14 temas; cuatro opciones distintas y una respuesta válida por pregunta; criterios de corrección completos; distribución de respuestas 12–13 por posición; contenido aceptado para prueba inicial. La política confirmada por Dave se registró posteriormente: 75 %, 3 intentos iniciales y preaprobación de los adicionales; vencimiento confirmado de 24 horas desde emisión. No se publica en el repositorio para repetir esas comprobaciones.
 
 ## Revisión necesaria antes de usarlo como material oficial
 
-Dave y los administradores deben revisar objetivos, actividades, evidencias y criterios; ajustar datos propios de la agencia; revisar cada pregunta y su respuesta en el archivo privado; y definir el vencimiento de invitaciones. La autorización previa y el control del cupo ya están implementados en la prueba local. Después se podrá preparar el catálogo en borrador dentro del entorno de prueba. Este paso no importa los 14 temas/materiales a la base ni asigna el programa a emisores. No se modificaron main, el login, almacenamiento o DatabasePad/Vercel de producción.
+El contenido está aceptado para la versión inicial de prueba. Sigue pendiente cargar los 14 temas/materiales y el programa como borradores del catálogo local, y resolver la carga del banco de preguntas desde un destino privado adecuado. Las adaptaciones de datos propios de la agencia pueden hacerse mediante revisiones editables. Los enlaces nuevos vencerán a las 24 horas desde emisión, calculadas por servidor. La autorización previa y el control del cupo están implementados localmente. Este paso no asigna programas a emisores ni modifica main, el login, almacenamiento o DatabasePad/Vercel de producción.
 
 ## Política confirmada por Dave — 2026-10-13
 
-Aprobación desde **75 %**, con **3 intentos iniciales**. Cualquier intento adicional requiere **aprobación previa**. Con 50 preguntas de igual valor se necesitan 38 aciertos para aprobar. El contenido propuesto permanece pendiente de confirmación.
+Aprobación desde **75 %**, con **3 intentos iniciales**. Cualquier intento adicional requiere **aprobación previa**. Con 50 preguntas de igual valor se necesitan 38 aciertos para aprobar. El contenido fue aceptado para la versión inicial de prueba; sigue editable y sin publicar.
 
 La aprobación de extras deberá registrarse por administración con cantidad, motivo, actor y fecha, vinculada al entrenamiento/examen correspondiente. Renovar o revocar un enlace no debe reiniciar el cupo automáticamente. El servidor local aplica el cupo confirmado y sus ampliaciones aprobadas. Las decisiones son únicas, se auditan y se conservan al reiniciar; el flujo está disponible en Quiz final. Registrar estas decisiones no publica un examen ni modifica versiones existentes.
+
+## Vencimiento confirmado — 2026-10-13
+
+Las invitaciones nuevas duran 24 horas exactas desde la emisión del servidor. El reloj del dispositivo y una fecha enviada por el navegador no pueden extenderlas. Se conservan los timestamps de invitaciones anteriores. El vencimiento impide iniciar, retomar o enviar respuestas con ese enlace; no borra el historial, no devuelve intentos consumidos ni reinicia el cupo al renovar.

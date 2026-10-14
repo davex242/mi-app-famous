@@ -125,9 +125,9 @@ export class LocalTrainingApi {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     return await this.request('/api/materials/download',{id}) as MaterialDownload;
   }
-  async issueExam(enrollment_id:string, exam_version_id:string, max_attempts:number, expires_at:string) {
+  async issueExam(enrollment_id:string, exam_version_id:string, max_attempts:number) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
-    return await this.request('/api/exams/issue',{enrollment_id,exam_version_id,max_attempts,expires_at}) as {assignment:{id:string};invitation_token:string};
+    return await this.request('/api/exams/issue',{enrollment_id,exam_version_id,max_attempts}) as {assignment:{id:string};invitation_token:string};
   }
   async revokeExam(assignment_id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);

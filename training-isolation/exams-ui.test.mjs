@@ -30,11 +30,11 @@ test('quiz browser: administrator publication, recruiter invitation, mobile resp
    await admin.locator('#exam-publish-form button[type="submit"]').click();await admin.locator('#notice').filter({hasText:'Examen publicado.'}).waitFor();
    assert.equal((await db.query('select status from public.training_exam_versions')).rows[0].status,'published');
   });
-  await t.test('recruiter issues invitation with explicit retries and expiry but cannot author exam',async()=>{
+  await t.test('recruiter issues invitation with explicit retries and server-fixed expiry but cannot author exam',async()=>{
    recruiter=await login('edit');assert.equal(await recruiter.locator('#exam-publish-form').count(),0);assert.equal(await recruiter.locator('[name="max_attempts"]').inputValue(),'');
    await recruiter.locator('[name="max_attempts"]').fill('2');
    const expires=await recruiter.evaluate(()=>{const d=new Date(Date.now()+86400000);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;});
-   await recruiter.locator('[name="expires_at"]').fill(expires);await recruiter.locator('#exam-issue-form button').click();await recruiter.locator('#exam-invitation').waitFor();
+   assert.equal(await recruiter.locator('[name="expires_at"]').count(),0);await recruiter.locator('#exam-issue-form button').click();await recruiter.locator('#exam-invitation').waitFor();
    invitation=await recruiter.locator('#exam-invitation input').inputValue();assignment=(await db.query('select * from public.training_exam_assignments')).rows[0];
    assert.ok(invitation.startsWith(url+'/quiz#'));assert.equal(assignment.max_attempts,2);assert.equal(assignment.host_id,demo.host_id);
   });
