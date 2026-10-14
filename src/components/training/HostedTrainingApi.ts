@@ -27,9 +27,17 @@ export function hostedRequestError(status:number,reason:unknown){
 }
 export class HostedTrainingApi extends LocalTrainingApi{
  constructor(private config:HostedTrainingConfig){super();}
+ private static readonly sessionKey='famous_training_preview_session';
+ private refreshToken:string|null=null;
+ private expiresAt=0;
+ private persist(){if(this.token&&this.refreshToken)sessionStorage.setItem(HostedTrainingApi.sessionKey,JSON.stringify({url:this.config.url,access:this.token,refresh:this.refreshToken,expires:this.expiresAt}));}
+ private async renew(){if(!this.refreshToken)throw new LocalTrainingError(401);const response=await fetch(this.config.url+'/auth/v1/token?grant_type=refresh_token',{method:'POST',credentials:'omit',cache:'no-store',headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:this.refreshToken})});if(!response.ok)throw new LocalTrainingError(401);const data=await response.json();this.token=data.access_token;this.refreshToken=data.refresh_token;this.expiresAt=Date.now()+(Number(data.expires_in)||3600)*1000;this.persist();}
+ async restore(){try{const raw=sessionStorage.getItem(HostedTrainingApi.sessionKey);if(!raw)return null;const saved=JSON.parse(raw);if(saved.url!==this.config.url||typeof saved.refresh!=='string'||typeof saved.access!=='string')return null;this.token=saved.access;this.refreshToken=saved.refresh;this.expiresAt=Number(saved.expires)||0;this.verified=true;if(Date.now()>this.expiresAt-60000)await this.renew();return await this.load();}catch{this.clear();sessionStorage.removeItem(HostedTrainingApi.sessionKey);return null;}}
+
  quizUrl(token:string){return `${window.location.origin}/training-quiz/index.html#${token}`;}
  protected async request(path:string,body?:object):Promise<unknown>{
   if(!hostedTrainingEnabled(this.config))throw new LocalTrainingError(403);
+  if(this.refreshToken&&Date.now()>this.expiresAt-60000)await this.renew();
   // Vercel's same-origin protection cookie unlocks the preview only.
   // The proxy forwards the training bearer, never browser cookies, to Supabase.
   const generation=this.generation,controller=new AbortController();this.controllers.add(controller);
@@ -39,7 +47,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
    const result=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);return result;
   }finally{this.controllers.delete(controller);}
  }
- async resume(){return this.verified&&this.token?await this.load():null;}
+ async resume(){return this.verified&&this.token?await this.load():await this.restore();}
  async connect(){const health=await this.request('/health') as {storage:string;initialized:boolean};if(health.storage!=='hosted-preview'||!health.initialized)throw new LocalTrainingError(503);this.verified=true;}
  async login(email:string,password:string){
   this.clear();await this.connect();const generation=this.generation;
@@ -47,7 +55,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
   if(generation!==this.generation)throw new LocalTrainingError(401);
   if(!response.ok)throw new LocalTrainingError(401);
   const data=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);if(typeof data.access_token!=='string'||data.access_token.length>8192)throw new LocalTrainingError(401);
-  this.token=data.access_token;try{return await this.load();}catch(error){await this.logout();throw error;}
+  this.token=data.access_token;this.refreshToken=data.refresh_token;this.expiresAt=Date.now()+(Number(data.expires_in)||3600)*1000;this.persist();try{return await this.load();}catch(error){await this.logout();throw error;}
  }
  async identities(){return await this.request('/api/identity/list',{}) as {users:Record<string,unknown>[];hosts:Record<string,unknown>[]};}
  async saveIdentity(kind:'user'|'host',body:object){return this.request('/api/identity/'+kind,body);}
@@ -56,5 +64,5 @@ export class HostedTrainingApi extends LocalTrainingApi{
   const response=await fetch(this.config.url+'/auth/v1/signup',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
   if(!response.ok)throw new LocalTrainingError(response.status===429?429:400);
  }
- async logout(){const token=this.token;this.clear();if(token){try{await fetch(this.config.url+'/auth/v1/logout?scope=local',{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(10000),headers:{apikey:this.config.key,Authorization:'Bearer '+token}});}catch{}}}
+ async logout(){const token=this.token;this.clear();this.refreshToken=null;this.expiresAt=0;sessionStorage.removeItem(HostedTrainingApi.sessionKey);if(token){try{await fetch(this.config.url+'/auth/v1/logout?scope=local',{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(10000),headers:{apikey:this.config.key,Authorization:'Bearer '+token}});}catch{}}}
 }
