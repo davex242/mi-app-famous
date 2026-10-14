@@ -70,7 +70,7 @@ export function createSandboxHttpServer(service,{storage='memory',reactAssets=nu
       const routes = {
         '/api/training/closing-preview':'previewClosing', '/api/training/complete':'completeTraining',
         '/api/training/closing-export':'exportClosing',
-        '/api/exams/edit-data':'examEditData', '/api/exams/template':'examTemplate', '/api/exams/publish':'publishExam', '/api/exams/issue':'issueExam', '/api/exams/revoke':'revokeExam',
+        '/api/exams/edit-data':'examEditData', '/api/exams/template':'examTemplate', '/api/exams/publish':'publishExam', '/api/exams/issue':'issueExam', '/api/exams/revoke':'revokeExam', '/api/exams/extra-request':'requestExtraAttempts', '/api/exams/extra-review':'reviewExtraAttempts',
         '/api/quiz/status':'examStatus', '/api/quiz/start':'startExam', '/api/quiz/submit':'submitExam',
         '/api/login': 'login', '/api/logout': 'logout', '/api/enrollments': 'enroll',
         '/api/sessions': 'schedule', '/api/evidence': 'submitEvidence',

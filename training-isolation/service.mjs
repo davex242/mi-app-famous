@@ -1,3 +1,4 @@
+import {examAttemptBudget} from './exam-attempts.mjs';
 import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createCatalogueOperations } from './catalogue.mjs';
@@ -110,6 +111,9 @@ export function createTrainingService(db) {
     workspace: token => run(token, async (tx, actor) => {
       const trainees = (await tx.query(`select host_id,recruiter_id from training_private.training_host_assignments
         where $1::boolean or recruiter_id=$2 order by host_id`, [admin(actor), actor.app_user_id])).rows;
+      const attemptBudgets=[];
+      const scopedEnrollments=(await tx.query('select id from public.training_enrollments where host_id=any($1::uuid[])',[trainees.map(row=>row.host_id)])).rows;
+      for(const e of scopedEnrollments)attemptBudgets.push({enrollment_id:e.id,...await examAttemptBudget(tx,e.id)});
       const exams=(await tx.query("select id,exam_key,version,status,question_count,pass_percent from public.training_exam_versions where status='published' order by exam_key,version desc")).rows;
       const closingRecords=await scopedClosingRecords(tx,actor,admin);
       const issuances=await scopedExamIssuances(tx,actor,admin);
@@ -127,6 +131,7 @@ export function createTrainingService(db) {
       result.materials = result.materials.map(material => ({ ...material, external_url: null }));
       result.exam_assignments=(await tx.query('select * from public.training_exam_assignments')).rows.map(a=>({...a,program_version_id:issuances.find(i=>i.assignment_id===a.id)?.program_version_id||null,revoked_at:revoked.find(t=>t.assignment_id===a.id)?.revoked_at||null}));
       result.exam_attempts=(await tx.query('select * from public.training_exam_attempts')).rows;
+      result.exam_attempt_budgets=attemptBudgets;
       result.progress=[];
       for(const e of result.enrollments) result.progress.push(await currentProgress(tx,e));
       result.sessions=result.sessions.map(s=>{

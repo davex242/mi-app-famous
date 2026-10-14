@@ -18,7 +18,7 @@ export default function TrainingContentProposal(){
         <h4>Evidencia propuesta</h4><p>{unit.evidence}</p>
         <h4>Criterios de revisión propuestos</h4><ul>{unit.review_criteria.map(line=><li key={line}>{line}</li>)}</ul>
       </article>
-      <h4>Reglas confirmadas del quiz</h4><p>Aprobación desde {proposal.pass_percent} % · {proposal.max_attempts} intentos iniciales. Los intentos adicionales requieren aprobación previa.</p><p>Con 50 preguntas de igual valor se necesitan 38 respuestas correctas para alcanzar el umbral. La autorización de intentos adicionales está pendiente de implementación.</p>
+      <h4>Reglas confirmadas del quiz</h4><p>Aprobación desde {proposal.pass_percent} % · {proposal.max_attempts} intentos iniciales. Los intentos adicionales requieren aprobación previa.</p><p>Con 50 preguntas de igual valor se necesitan 38 respuestas correctas para alcanzar el umbral. La solicitud y preaprobación de intentos adicionales están disponibles en la prueba local, con control del servidor.</p>
       <h4>Decisiones de la agencia pendientes</h4><ul>{proposal.agency_decisions.map(line=><li key={line}>{line}</li>)}</ul>
       <p>Banco de 50 preguntas preparado por separado para revisión privada. Esta guía no contiene preguntas ni respuestas del examen. El vencimiento de las invitaciones sigue pendiente de definición.</p>
       <button type="button" onClick={download}>Descargar guía propuesta de 14 días</button>

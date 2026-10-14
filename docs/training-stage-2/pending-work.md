@@ -19,10 +19,10 @@ These are functional with synthetic data in the separate local training runtime.
 
 - Approval threshold: **75%**. With 50 equally weighted questions, 38 correct answers pass (37 give 74%).
 - Initial allowance: **3 attempts**.
-- Additional attempts require **prior approval**. The workflow, server guard and consolidated attempt accounting still need implementation; renewing/revoking an invitation must not reset the allowance without approval.
+- Additional attempts require **prior approval**. The request, administrative review and server guard are implemented in the isolated runtime. An enrollment has three initial attempts plus approved extras across all invitations/exam versions; renewal/revocation never resets consumption. Approval audit records persist across local restart.
 - Content remains pending agency review; invitation expiry is not defined.
 
-These values are recorded in the study proposal and private review file. The existing generic sandbox exam editor/service is unchanged; this metadata update does not enforce three attempts or grant extras.
+These values are recorded in the study proposal and private review file. The attempt service now enforces the allowance; approval percentages remain immutable per published exam version. The proposed initial course uses the confirmed 75% when its reviewed exam is later published. Existing synthetic exams/thresholds are preserved.
 
 ## Pending, in recommended order
 
@@ -35,4 +35,4 @@ These values are recorded in the study proposal and private review file. The exi
 7. **Validate the real integration in a separate test environment.** Exercise multiple concurrent users, current assignment changes, permission revocation, failure recovery, file access and end-to-end completion against the chosen backend. Local browser/PGlite tests do not establish hosted concurrency or deployment readiness.
 8. **Review the release and rollback before merging.** Confirm the intended change set, preview deployment, gradual enablement and backups. A Vercel code rollback does not undo records written or database changes.
 
-Next development step within the current isolated scope: implement prior approval and server-side accounting of additional attempts using synthetic data, while content review remains deferred. Then prepare the confirmed content as local catalogue drafts. Items 4–8 require later integration work and explicit authorization for any hosted configuration or schema changes.
+Next development step within the current isolated scope: review the content later as requested and prepare its catalogue in local drafts. In parallel, decide the expiry policy and private-bank integration approach. Attempt preapproval is complete locally; real identity/backend/file-hosting integration remains separate. Items 4–8 require later integration work and explicit authorization for any hosted configuration or schema changes.

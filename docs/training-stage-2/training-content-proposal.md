@@ -400,10 +400,10 @@ El banco privado se validó por separado: exactamente 50 IDs/enunciados distinto
 
 ## Revisión necesaria antes de usarlo como material oficial
 
-Dave y los administradores deben revisar objetivos, actividades, evidencias y criterios; ajustar datos propios de la agencia; revisar cada pregunta y su respuesta en el archivo privado; y definir el vencimiento de invitaciones. La autorización previa de intentos adicionales debe implementarse antes de habilitar esta política. Después se podrá preparar el catálogo en borrador dentro del entorno de prueba. Este paso no importa los 14 temas/materiales a la base ni asigna el programa a emisores. No se modificaron main, el login, almacenamiento o DatabasePad/Vercel de producción.
+Dave y los administradores deben revisar objetivos, actividades, evidencias y criterios; ajustar datos propios de la agencia; revisar cada pregunta y su respuesta en el archivo privado; y definir el vencimiento de invitaciones. La autorización previa y el control del cupo ya están implementados en la prueba local. Después se podrá preparar el catálogo en borrador dentro del entorno de prueba. Este paso no importa los 14 temas/materiales a la base ni asigna el programa a emisores. No se modificaron main, el login, almacenamiento o DatabasePad/Vercel de producción.
 
 ## Política confirmada por Dave — 2026-10-13
 
 Aprobación desde **75 %**, con **3 intentos iniciales**. Cualquier intento adicional requiere **aprobación previa**. Con 50 preguntas de igual valor se necesitan 38 aciertos para aprobar. El contenido propuesto permanece pendiente de confirmación.
 
-La aprobación de extras deberá registrarse por administración con cantidad, motivo, actor y fecha, vinculada al entrenamiento/examen correspondiente. Renovar o revocar un enlace no debe reiniciar el cupo automáticamente. El servidor deberá aplicar el cupo confirmado y sus ampliaciones aprobadas; ese flujo está pendiente. Registrar estas decisiones no publica un examen ni modifica versiones existentes.
+La aprobación de extras deberá registrarse por administración con cantidad, motivo, actor y fecha, vinculada al entrenamiento/examen correspondiente. Renovar o revocar un enlace no debe reiniciar el cupo automáticamente. El servidor local aplica el cupo confirmado y sus ampliaciones aprobadas. Las decisiones son únicas, se auditan y se conservan al reiniciar; el flujo está disponible en Quiz final. Registrar estas decisiones no publica un examen ni modifica versiones existentes.

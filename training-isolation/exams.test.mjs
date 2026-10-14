@@ -114,6 +114,7 @@ test('final quiz: immutable versions, scoped invitations, private correction and
    assert.equal((await db.query('select * from training_private.training_exam_answers where attempt_id=$1',[started.attempt_id])).rows.length,0);
   });
   await t.test('one failing attempt exhausts limit; old attempt cannot cross invitation',async()=>{
+   const request=(await req('/api/exams/extra-request',{enrollment_id:e.id,extra_attempts:3,reason:'DEMO retry cases'},tokens.edit)).body;assert.equal((await req('/api/exams/extra-review',{enrollment_id:e.id,request_id:request.id,decision:'approved',review_notes:'DEMO approved before additional starts'},tokens.superadmin)).status,200);
    issued=(await req('/api/exams/issue',issue({max_attempts:1}),tokens.superadmin)).body;
    assert.equal((await req('/api/quiz/submit',{attempt_id:started.attempt_id,answers},issued.invitation_token)).status,404);
    started=(await req('/api/quiz/start',{},issued.invitation_token)).body;

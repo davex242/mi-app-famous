@@ -17,7 +17,7 @@ export class LocalTrainingError extends Error {
 export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
 export type PublicRow = {id?: string; [key: string]: unknown};
 export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
-const tables = ['trainees','topics','materials','program_versions','program_items','program_materials','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','closing_records','exams','exam_assignments','exam_attempts','events','progress'] as const;
+const tables = ['trainees','topics','materials','program_versions','program_items','program_materials','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','closing_records','exams','exam_assignments','exam_attempts','exam_attempt_budgets','events','progress'] as const;
 export type AgendaParameters = {enrollment_id:string; start_date:string; local_time:string; weekdays:number[]};
 export type AgendaPreview = {preview:true; timezone:string; skipped:number; sessions:PublicRow[]; preview_hash:string};
 export type MaterialPreview = {type:'text';content:string;title:string}|{type:'link';url:string;title:string}|{type:'image';image:{data:string};title:string}|{type:'video';video:{data:string};title:string};
@@ -172,6 +172,12 @@ export class LocalTrainingApi {
   async publishMaterial(id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/materials/publish',{id});
+  }
+  async requestExtraAttempts(enrollment_id:string,extra_attempts:number,reason:string) {
+    await this.request('/api/exams/extra-request',{enrollment_id,extra_attempts,reason});
+  }
+  async reviewExtraAttempts(enrollment_id:string,request_id:string,decision:string,review_notes:string) {
+    await this.request('/api/exams/extra-review',{enrollment_id,request_id,decision,review_notes});
   }
   async examTemplate() {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);

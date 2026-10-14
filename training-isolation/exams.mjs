@@ -1,3 +1,4 @@
+import {examAttemptBudget,createAttemptApprovalOperations} from './exam-attempts.mjs';
 import { randomBytes, createHash } from 'node:crypto';
 import { examTemplate } from './exam-template.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -16,13 +17,14 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
         where t.token_hash=$1 and t.revoked_at is null and a.expires_at>now()
         and a.status in ('issued','completed') and v.status='published' for update of a`,[hash(token)])).rows[0];
       if(!a)fail(404,'Invitation unavailable');
-      const e=(await tx.query('select status,host_id from public.training_enrollments where id=$1 for share',[a.enrollment_id])).rows[0];
+      const e=(await tx.query('select status,host_id from public.training_enrollments where id=$1 for update',[a.enrollment_id])).rows[0];
       if(!e || e.status!=='active' || e.host_id!==a.host_id)fail(404,'Invitation unavailable');
       return operation(tx,a);
     });
   }
   const result=a=>({attempt_id:a.id,attempt_number:a.attempt_number,submitted_at:a.submitted_at,score_percent:Number(a.score_percent),passed:a.passed});
   return {
+    ...createAttemptApprovalOperations(run,{fields,text,uuid,fail,requireAdmin,requireWrite,enrollment,audit}),
     examTemplate:(token,body)=>run(token,async(_,actor)=>{requireAdmin(actor);fields(body,[]);return {demo:true,questions:examTemplate()};}),
     examEditData:(token,body)=>run(token,async(tx,actor)=>{
       requireAdmin(actor);fields(body,['id']);
@@ -66,6 +68,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       if(!Number.isFinite(expires)||expires<=Date.now()||expires>Date.now()+30*86400000)fail(400,'Future expiry within 30 days required');
       const v=(await tx.query("select * from public.training_exam_versions where id=$1 and status='published' for share",[uuid(body.exam_version_id)])).rows[0];
       if(!v)fail(409,'Published exam required');
+      const budget=await examAttemptBudget(tx,e.id);if(body.max_attempts>budget.total||budget.remaining===0)fail(409,'Prior approval for additional attempts required');
       const qs=await questions(tx,v.id),keys=(await tx.query(`select k.* from training_private.training_exam_keys k join public.training_exam_questions q on q.id=k.question_id where q.exam_version_id=$1`,[v.id])).rows;
       if(qs.length!==50||qs.some(q=>{const k=keys.find(k=>k.question_id===q.id);return !k||k.correct_option>=q.options.length;}))fail(409,'Exam content is inconsistent');
       if((await tx.query(`select a.id from public.training_exam_assignments a join training_private.training_exam_tokens t on t.assignment_id=a.id
@@ -89,8 +92,9 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
     examStatus:(token,body)=>publicRun(token,async(tx,a)=>{
       fields(body,[]);
       const attempts=(await tx.query('select * from public.training_exam_attempts where assignment_id=$1 order by attempt_number',[a.id])).rows;
-      return {question_count:50,pass_percent:Number(a.pass_percent),max_attempts:a.max_attempts,expires_at:a.expires_at,
-        attempts:attempts.filter(r=>r.submitted_at).map(result),can_start:a.status==='issued'&&(!attempts.length||!attempts.at(-1).submitted_at||attempts.length<a.max_attempts)};
+      const budget=await examAttemptBudget(tx,a.enrollment_id);
+      return {attempts_remaining:budget.remaining,question_count:50,pass_percent:Number(a.pass_percent),max_attempts:a.max_attempts,expires_at:a.expires_at,
+        attempts:attempts.filter(r=>r.submitted_at).map(result),can_start:a.status==='issued'&&(attempts.some(row=>!row.submitted_at)||(attempts.length<a.max_attempts&&budget.remaining>0))};
     }),
     startExam:(token,body)=>publicRun(token,async(tx,a)=>{
       fields(body,[]);
@@ -98,6 +102,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       const attempts=(await tx.query('select * from public.training_exam_attempts where assignment_id=$1 order by attempt_number',[a.id])).rows;
       let current=attempts.find(a=>!a.submitted_at);
       if(!current){
+        const budget=await examAttemptBudget(tx,a.enrollment_id);if(budget.remaining===0)fail(409,'Prior approval for additional attempts required');
         if(attempts.length>=a.max_attempts)fail(409,'Attempt limit reached');
         current=(await tx.query('insert into public.training_exam_attempts(assignment_id,attempt_number) values($1,$2) returning *',[a.id,attempts.length+1])).rows[0];
         await audit(tx,{app_user_id:null},'exam_started','exam_attempt',current.id,a.enrollment_id,{assignment_id:a.id,identity:'invitation bearer'});
