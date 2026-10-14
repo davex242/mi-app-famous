@@ -16,7 +16,7 @@ export class LocalTrainingError extends Error {
 export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
 export type PublicRow = {id?: string; [key: string]: unknown};
 export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
-const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','approvals','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
+const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
 export type AgendaParameters = {enrollment_id:string; start_date:string; local_time:string; weekdays:number[]};
 export type AgendaPreview = {preview:true; timezone:string; skipped:number; sessions:PublicRow[]; preview_hash:string};
 export class LocalTrainingApi {
@@ -96,6 +96,14 @@ export class LocalTrainingApi {
   async downloadEvidence(evidence_id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     return await this.request('/api/evidence/file-download',{evidence_id}) as {mime:string;image_base64?:string;pdf_base64?:string;video_base64?:string};
+  }
+  async assess(session_id:string, score:number, passed:boolean, notes:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/assessments',{session_id,score,passed,notes});
+  }
+  async completePractice(session_id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/items/complete',{session_id});
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.

@@ -1,6 +1,6 @@
 # Native React / local synthetic API
 
-The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Native agenda now supports preview/confirmation, chosen weekdays, local dates/times, attendance and rescheduling with required reasons. Native evidence submission, private PNG/PDF/MP4 downloads and administrative approval/rejection are connected. Assessment/practical validation, material access, invitations and completion remain to be adapted; the standalone local UI remains their working reference.
+The isolated branch now includes a first operational React connection to the existing local training service. All nine sections read scoped workspace data. Program enrollment writes to the local PGlite sandbox, refreshes the workspace and handles conflicts. Native agenda now supports preview/confirmation, chosen weekdays, local dates/times, attendance and rescheduling with required reasons. Native evidence submission, private PNG/PDF/MP4 downloads and administrative approval/rejection are connected. Native administrative assessment and explicit practical validation are connected. Material access, invitations and final closing remain to be adapted; the standalone local UI remains their working reference.
 
 ## Run
 
@@ -28,10 +28,16 @@ Recruiters and administrators can submit a required description with an optional
 
 Files are fetched only through the permission-checked download endpoint and a short-lived browser Blob URL. Workspace DTOs carry no file bytes. The current native view does not inline-preview attachments. Reviewers must explicitly choose approval/rejection and supply notes. Only administrators see pending review forms; read-only accounts see no submission/review forms. Pending notes survive status filters. Already-reviewed or closed evidence cannot be reviewed again; the server rejects stale review attempts. Evidence approval does not create assessment, completion or final closing.
 
+## Administrative assessment and practical validation
+
+The evidence section now includes a scoped practical evaluation table and server-projected progress. Only administrators see the evaluation selector and operational forms. Scores must be explicitly entered from 0 to 100, with a separately chosen approved/not-approved result and required notes. No automatic passing threshold or default score is invented. Assessments remain append-only through the existing service; the latest assessment controls eligibility.
+
+Practical validation shows the selected item's evidence/assessment requirements. A separate confirmation is tied to the selected session and workspace snapshot; selecting another session, refreshing, or saving an assessment invalidates it. React enables validation only when its displayed prerequisites are met; the server remains authoritative and rejects stale passing assessments or missing approved evidence. Validated practices lose their action form. Scoped completion/progress counts refresh after success. A practice completion does not complete enrollment, issue a quiz or bypass final closing.
+
 ## Validation
 
 `npm run test:react-local` exercises the actual React component, HTTP server, credential service and isolated database in Chromium, including enrollment, duplicate conflicts, read-only denial, role downgrade, revocation, explicit opt-in and capability checks, mobile navigation and absence of external traffic/browser persistence. Set `BROWSER_EXECUTABLE_PATH` for an existing Chromium binary if needed.
 
-Validation on 2026-10-13: 127 local React/API checks, 233 default React DEMO checks, strict TypeScript checking passed. The evidence service was not modified; the preceding agenda stage also passed 46 HTTP API/program tests. Enrollment screenshots are in `preview/react-local-api/`; agenda/attendance screenshots are in `preview/react-agenda-api/`, and review screenshots in `preview/react-evidence-api/`.
+Validation on 2026-10-13: 149 local React/API checks, 233 default React DEMO checks, strict TypeScript checking passed. The assessment/evidence services were not modified; the preceding agenda stage also passed 46 HTTP API/program tests. Enrollment screenshots are in `preview/react-local-api/`; agenda/attendance screenshots are in `preview/react-agenda-api/`, and review screenshots in `preview/react-evidence-api/`, and practical validation screenshots in `preview/react-assessment-api/`.
 
 Keep `npm run test:react-demo` as the default-mode regression check. These local tests do not establish production readiness, hosted access policies, concurrent hosted behavior or a migration plan. Training remains on `base44/setup-b8f0f68b` and is not merged into main.

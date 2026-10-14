@@ -1,3 +1,4 @@
+import TrainingLocalAssessment from './TrainingLocalAssessment';
 import React, {useRef,useState} from 'react';
 import {LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
@@ -62,5 +63,6 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
       {file&&<label className="td-weekday"><input aria-label="Confirmo uso de archivo ficticio" type="checkbox" required checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/>Confirmo que el archivo es ficticio y autorizado para esta prueba local.</label>}
       <button disabled={busy||!sessionId||!description.trim()||!!fileError||(!!file&&!consent)}>Enviar evidencia a revisión DEMO</button>
     </form>}
+    <TrainingLocalAssessment api={api} workspace={workspace} role={role} busy={busy} run={run} refresh={refresh} notify={notify}/>
   </>;
 }
