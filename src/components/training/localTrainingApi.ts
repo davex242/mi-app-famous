@@ -22,6 +22,7 @@ export type AgendaPreview = {preview:true; timezone:string; skipped:number; sess
 export type MaterialPreview = {type:'text';content:string;title:string}|{type:'link';url:string;title:string}|{type:'image';image:{data:string};title:string}|{type:'video';video:{data:string};title:string};
 export type MaterialDownload = {mime:string;content?:string;image_base64?:string;pdf_base64?:string;video_base64?:string};
 export type ClosingPreview={ready:boolean;preview_hash:string;program_version_id:string;program_title:string;program_version:number;progress:{completed_items:number;total_items:number;percent:number};checks:{day:number;ready:boolean;problems:string[]}[];quiz:{ready:boolean;score_percent:number|null;pass_percent:number|null};problems:string[]};
+export type ProgramUpdatePreview={from_version_id:string;to_version_id:string;from_version:number;to_version:number;changelog:string;total_items:number;preserved_completed_items:number;preserved_session_items:number;new_required_items:number;historical_only_items:number;previous_progress:{completed_items:number;total_items:number;percent:number};updated_percent:number;preview_hash:string};
 export class LocalTrainingApi {
   private token: string | null = null;
   private verified = false;
@@ -135,6 +136,14 @@ export class LocalTrainingApi {
   async exportClosing(record_id:string, format:'html'|'json') {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     return await this.request('/api/training/closing-export',{record_id,format}) as {content:string;mime:string;sha256:string};
+  }
+  async previewProgramUpdate(enrollment_id:string,to_version_id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/program-updates/preview',{enrollment_id,to_version_id}) as ProgramUpdatePreview;
+  }
+  async acceptProgramUpdate(enrollment_id:string,to_version_id:string,expected_from_version_id:string,preview_hash:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/program-updates/accept',{enrollment_id,to_version_id,expected_from_version_id,preview_hash});
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.
