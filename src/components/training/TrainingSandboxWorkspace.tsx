@@ -37,6 +37,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [recruiterFilter,setRecruiterFilter] = useState('');
   const [officialRoster,setOfficialRoster]=useState<Pick<Host,'id'|'host_id'|'host_name'|'reclutador'>[]>([]),[officialError,setOfficialError]=useState(''),[officialLoading,setOfficialLoading]=useState(false),[trainingIdentities,setTrainingIdentities]=useState<Record<string,unknown>[]>([]);
   const [batchLimit,setBatchLimit] = useState(25);
+  const [enrollmentOwner,setEnrollmentOwner]=useState(''),[trainingUsers,setTrainingUsers]=useState<Record<string,unknown>[]>([]),[officialCount,setOfficialCount]=useState<number|null>(null),[enrollConfirmed,setEnrollConfirmed]=useState(false);
   useEffect(()=>{if(hosted)sessionStorage.setItem('famous_training_section',section);},[section,hosted]);
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
@@ -56,6 +57,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const recruiterOf=(row:PublicRow)=>typeof row.reclutador==='string'?row.reclutador:typeof row.original_recruiter==='string'?row.original_recruiter:'';
   const recruiters=[...new Set([...((workspace?.trainees??[]).map(recruiterOf)),...officialRoster.map(h=>h.reclutador)].filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const officialMapped=officialRoster.map(h=>{const matches=trainingIdentities.filter(x=>String(x.legacy_host_key||'')===h.id||(!!h.host_id&&String(x.mico_id||'')===String(h.host_id)));const linked=matches.length===1&&(!matches[0].legacy_host_key||String(matches[0].legacy_host_key)===h.id)&&(!matches[0].mico_id||String(matches[0].mico_id)===String(h.host_id))?matches[0]:null;const trainee=workspace?.trainees.find(row=>String(row.host_id)===String(linked?.id));return {official:h,trainee,linked,conflict:matches.length>1||(matches.length===1&&!linked)};});
+  const visibleOfficial=officialMapped.filter(x=>(!recruiterFilter||x.official.reclutador===recruiterFilter)&&[x.official.host_name,x.official.host_id,x.official.reclutador].some(part=>String(part||'').toLowerCase().includes(hostSearch.trim().toLowerCase())));
   const visibleTrainees=(workspace?.trainees??[]).filter(row=>{const official=officialMapped.find(x=>x.trainee?.host_id===row.host_id);return (!hosted||!officialRoster.length||!!official)&&(!recruiterFilter||(hosted&&officialRoster.length?official?.official.reclutador===recruiterFilter:recruiterOf(row)===recruiterFilter))&&[value(row,'label'),value(row,'mico_id'),value(row,'host_id'),official?.official.host_name||'',official?.official.host_id||''].some(part=>part.toLocaleLowerCase().includes(hostSearch.trim().toLocaleLowerCase()));});
   return <section className="training-demo td-local" aria-label="Training API local">
     <div className="td-notice"><strong>{hosted?'PREVIEW · Capacitación con datos persistentes':'PRUEBA LOCAL · API de entrenamiento'}</strong><p>{hosted?'Este módulo usa el Supabase separado de capacitación y una sesión propia verificada. Los registros existentes de la app continúan en su backend actual.':'Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.'}</p></div>
@@ -86,32 +88,67 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        const targets=[...new Set(selectedHosts)].filter(id=>workspace.trainees.some(row=>value(row,'host_id')===id)&&(!hosted||officialRoster.length>0&&officialMapped.some(x=>x.trainee?.host_id===id))).slice(0,batchLimit);
+        if(hosted&&!enrollConfirmed)throw new Error('Confirma la selección antes de inscribir');
+        const targets=[...new Set(selectedHosts)].slice(0,batchLimit);
         const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
         const remaining:string[]=[...selectedHosts.filter(id=>!targets.includes(id))];
-        for(const hostId of targets){
-          if(workspace.enrollments.some(row=>row.host_id===hostId&&row.program_version_id===program&&row.status==='active')){outcomes.push({hostId,ok:false,message:'Ya tiene una inscripción activa en este programa'});continue;}
-          try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
-          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;outcomes.push({hostId,ok:false,message:reason instanceof LocalTrainingError?reason.message:'No se pudo inscribir'});remaining.push(hostId);}
+        for(const selectedId of targets){
+          let hostId=selectedId;
+          try{
+            if(hosted){
+              const official=officialMapped.find(x=>x.official.id===selectedId);
+              if(!official)throw new Error('Emisor no encontrado en el padrón oficial');
+              if(official.conflict)throw new Error('Conflicto de identidad: requiere revisión');
+              if(!/^[0-9]{1,32}$/.test(String(official.official.host_id||'')))throw new Error('ID MICO inválido');
+              const sameMico=officialRoster.filter(h=>String(h.host_id)===String(official.official.host_id));
+              if(sameMico.length!==1)throw new Error('ID MICO duplicado en el padrón');
+              const remote=api.current as HostedTrainingApi;
+              const latest=await remote.identities();
+              const matches=latest.hosts.filter(h=>String(h.legacy_host_key||'')===selectedId||String(h.mico_id||'')===String(official.official.host_id));
+              if(matches.length>1)throw new Error('Varias identidades coincidentes; revisar');
+              if(matches.length===1){
+                const match=matches[0];
+                if((match.legacy_host_key&&String(match.legacy_host_key)!==selectedId)||(match.mico_id&&String(match.mico_id)!==String(official.official.host_id)))throw new Error('Identidad vinculada a otro emisor');
+                hostId=String(match.id);
+              }else{
+                if(data.actor.role!=='superadmin')throw new Error('Un administrador debe vincular esta identidad primero');
+                if(!enrollmentOwner)throw new Error('Selecciona el responsable de capacitación');
+                await remote.saveIdentity('host',{display_name:official.official.host_name,mico_id:String(official.official.host_id),legacy_host_key:selectedId,recruiter_id:enrollmentOwner,confirmed:true,expected_hash:null});
+                const verified=await remote.identities();
+                const match=verified.hosts.filter(h=>String(h.legacy_host_key||'')===selectedId&&String(h.mico_id||'')===String(official.official.host_id));
+                if(match.length!==1)throw new Error('No se pudo verificar la identidad recién vinculada');
+                hostId=String(match[0].id);
+              }
+            }else if(!workspace.trainees.some(row=>value(row,'host_id')===hostId))throw new Error('Emisor no disponible');
+            if(workspace.enrollments.some(row=>row.host_id===hostId&&row.program_version_id===program&&row.status==='active')){outcomes.push({hostId:selectedId,ok:false,message:'Ya tiene una inscripción activa en este programa'});continue;}
+            await api.current.enroll(hostId,program,timezone);
+            outcomes.push({hostId:selectedId,ok:true,message:'Vinculado e inscrito'});
+          }catch(reason){
+            if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status)){outcomes.push({hostId:selectedId,ok:false,message:reason.message});remaining.push(selectedId);break;}
+            outcomes.push({hostId:selectedId,ok:false,message:reason instanceof Error?reason.message:'No se pudo inscribir'});remaining.push(selectedId);
+          }
         }
-        setBatchResults(outcomes);setSelectedHosts(remaining);await refresh();
+        setBatchResults(outcomes);setSelectedHosts(remaining);setEnrollConfirmed(false);await refresh();
         if(mounted.current)setNotice(`Lote procesado: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} fallidas; ${remaining.length} emisores conservados en la selección.`);
       });}}><h3>Inscribir emisores por lotes</h3><label>Máximo por lote<select aria-label="Tamaño del lote" value={batchLimit} onChange={e=>setBatchLimit(Number(e.target.value))} disabled={busy}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label><p>Para evitar bloqueos, se procesan hasta {batchLimit} emisores por operación. Los restantes continúan seleccionados para el siguiente lote.</p>
-        {hosted&&<><p>Consulta el padrón oficial y sus vinculaciones antes de seleccionar emisores. Solo se pueden inscribir identidades que el servidor ya reconoce y que aparecen en el catálogo autorizado de capacitación.</p><button type="button" disabled={busy||officialLoading} onClick={()=>{setOfficialLoading(true);setOfficialError('');void (async()=>{try{const [roster,identities]=await Promise.all([supabase.from('hosts').select('id,host_id,host_name,reclutador').order('host_name',{ascending:true}).range(0,1999),(api.current as HostedTrainingApi).identities()]);if(roster.error)throw roster.error;setOfficialRoster(roster.data||[]);setTrainingIdentities(identities.hosts);setSelectedHosts([]);}catch{setOfficialError('No se pudo cargar el padrón o las vinculaciones autorizadas.');}finally{setOfficialLoading(false);}})();}}>{officialLoading?'Consultando...':'Cargar emisores oficiales para inscripción'}</button>{officialError&&<p role="alert">{officialError}</p>}{officialRoster.length>0&&<p>{officialRoster.length} emisores oficiales consultados · {officialMapped.filter(x=>x.trainee).length} disponibles para inscribir · {officialMapped.filter(x=>!x.trainee).length} sin identidad habilitada en este catálogo.</p>}</>}
+        {hosted&&<><p>Consulta el padrón oficial y sus vinculaciones antes de seleccionar emisores. Selecciona emisores directamente del padrón oficial. Al confirmar, la plataforma vincula las identidades pendientes (con permisos de administrador) y luego solicita su inscripción al servidor.</p><button type="button" disabled={busy||officialLoading} onClick={()=>{setOfficialLoading(true);setOfficialError('');void (async()=>{try{const [roster,identities]=await Promise.all([supabase.from('hosts').select('id,host_id,host_name,reclutador',{count:'exact'}).order('host_name',{ascending:true}).range(0,1999),(api.current as HostedTrainingApi).identities()]);if(roster.error)throw roster.error;setOfficialRoster(roster.data||[]);setOfficialCount(roster.count);setTrainingIdentities(identities.hosts);setTrainingUsers(identities.users);setSelectedHosts([]);}catch{setOfficialError('No se pudo cargar el padrón o las vinculaciones autorizadas.');}finally{setOfficialLoading(false);}})();}}>{officialLoading?'Consultando...':'Cargar emisores oficiales para inscripción'}</button>{officialError&&<p role="alert">{officialError}</p>}{officialRoster.length>0&&<p>{officialRoster.length} emisores oficiales consultados · {officialMapped.filter(x=>x.trainee).length} disponibles para inscribir · {officialMapped.filter(x=>!x.trainee).length} sin identidad habilitada en este catálogo.</p>}</>}
         {!hosted&&<p role="note">Origen: catálogo local de capacitación.</p>}
         <label>Buscar emisor por nombre o ID de MICO<input aria-label="Buscar emisor registrado" value={hostSearch} onChange={event=>setHostSearch(event.target.value)} placeholder="Nombre o ID" disabled={busy}/></label>
         <label>Filtrar por reclutador<select aria-label="Filtrar por reclutador" value={recruiterFilter} onChange={event=>setRecruiterFilter(event.target.value)} disabled={busy||!recruiters.length}><option value="">Todos los reclutadores disponibles</option>{recruiters.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
         {!recruiters.length&&<p>El catálogo de capacitación todavía no incluye el reclutador original. El filtro se activará cuando la integración entregue ese dato verificado.</p>}
         <p>Selecciona uno o varios emisores. Cada inscripción se guarda por separado y conserva su historial individual. Los errores no cancelan las inscripciones correctas.</p>
+        {hosted&&data.actor.role==='superadmin'&&<label>Responsable de capacitación para nuevas vinculaciones<select value={enrollmentOwner} onChange={e=>{setEnrollmentOwner(e.target.value);setEnrollConfirmed(false);}}><option value="">Selecciona un responsable</option>{trainingUsers.filter(u=>u.is_active&&u.app_user_id).map(u=><option key={String(u.app_user_id)} value={String(u.app_user_id)}>{String(u.display_name||u.email)}</option>)}</select></label>}
         <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
-          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>[...new Set([...current,...visibleTrainees.map(row=>value(row,'host_id')).filter(id=>id!=='—')])])}>Seleccionar todos los visibles</button>
-          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>current.filter(id=>!visibleTrainees.some(row=>value(row,'host_id')===id)))}>Quitar visibles</button><button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar toda la selección</button>
-          {visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/ >{value(row,'label')} {enrolledHostIds.has(id)?'· Ya tiene capacitación activa':''}</label>;})}
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>[...new Set([...current,...(hosted?visibleOfficial.map(x=>x.official.id):visibleTrainees.map(row=>value(row,'host_id'))).filter(id=>id!=='—')])])}>Seleccionar todos los visibles</button>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(current=>current.filter(id=>!(hosted?visibleOfficial.some(x=>x.official.id===id):visibleTrainees.some(row=>value(row,'host_id')===id))))}>Quitar visibles</button><button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar toda la selección</button>
+          {hosted?visibleOfficial.map(x=><label key={x.official.id} className="td-weekday"><input type="checkbox" disabled={x.conflict} checked={selectedHosts.includes(x.official.id)} onChange={event=>{setEnrollConfirmed(false);setSelectedHosts(current=>event.target.checked?[...current,x.official.id]:current.filter(id=>id!==x.official.id));}}/>{x.official.host_name} · MICO {x.official.host_id} · {x.official.reclutador||'Sin reclutador'} · {x.conflict?'Conflicto':x.linked?'Vinculado':'Pendiente de vincular'}</label>):visibleTrainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/ >{value(row,'label')} {enrolledHostIds.has(id)?'· Ya tiene capacitación activa':''}</label>;})}
         </fieldset>
         <label>Programa publicado<select aria-label="Programa publicado" required value={program} onChange={e=>setProgram(e.target.value)} disabled={busy}><option value="">Selecciona un programa</option>{workspace.program_versions.filter(row=>row.status==='published').map(row=><option key={row.id} value={row.id}>{value(row,'title')} · v{value(row,'version')}</option>)}</select></label>
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
-        <button disabled={busy||!selectedHosts.length||!program||(!!hosted&&!officialRoster.length)}>Inscribir {selectedHosts.length} emisor(es)</button>
-        {!!batchResults.length&&<div role="status"><h4>Resultado por emisor</h4><ul>{batchResults.map((row,index)=><li key={row.hostId+'-'+index}>{hostLabel(row.hostId)}: {row.message}</li>)}</ul></div>}
+        {hosted&&<label><input type="checkbox" checked={enrollConfirmed} onChange={e=>setEnrollConfirmed(e.target.checked)}/>Confirmo que deseo vincular los pendientes e inscribir los emisores seleccionados en este programa.</label>}
+        {hosted&&officialCount!==officialRoster.length&&<p role="alert">Padrón incompleto. No se permite inscribir hasta cargar todos los registros.</p>}
+        <button disabled={busy||!selectedHosts.length||!program||(!!hosted&&(!officialRoster.length||officialCount!==officialRoster.length||!enrollConfirmed))}>Inscribir {selectedHosts.length} emisor(es)</button>
+        {!!batchResults.length&&<div role="status"><h4>Resultado por emisor</h4><ul>{batchResults.map((row,index)=><li key={row.hostId+'-'+index}>{hosted?officialRoster.find(h=>h.id===row.hostId)?.host_name||row.hostId:hostLabel(row.hostId)}: {row.message}</li>)}</ul></div>}
       </form>}
       {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <p>Cada inscripción conserva su versión del programa. Publicar una versión nueva permite revisarla después en Actualizaciones.</p>}
     </>}
