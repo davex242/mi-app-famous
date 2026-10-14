@@ -24,7 +24,8 @@
     "test:react-attempt-approvals": "node react-attempt-approvals-ui.test.mjs",
     "test:accepted-course": "node --expose-gc --test --test-concurrency=1 accepted-course.test.mjs",
     "test:react-catalogue-import": "node react-catalogue-import-ui.test.mjs",
-    "test:private-exam-import": "node private-exam-import.test.mjs"
+    "test:private-exam-import": "node private-exam-import.test.mjs",
+    "test:accepted-journey": "node accepted-training-journey.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",
