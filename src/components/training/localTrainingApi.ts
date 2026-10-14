@@ -16,7 +16,7 @@ export class LocalTrainingError extends Error {
 export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
 export type PublicRow = {id?: string; [key: string]: unknown};
 export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
-const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','closing_records','exams','exam_assignments','exam_attempts','events','progress'] as const;
+const tables = ['trainees','topics','materials','program_versions','program_items','program_materials','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','closing_records','exams','exam_assignments','exam_attempts','events','progress'] as const;
 export type AgendaParameters = {enrollment_id:string; start_date:string; local_time:string; weekdays:number[]};
 export type AgendaPreview = {preview:true; timezone:string; skipped:number; sessions:PublicRow[]; preview_hash:string};
 export type MaterialPreview = {type:'text';content:string;title:string}|{type:'link';url:string;title:string}|{type:'image';image:{data:string};title:string}|{type:'video';video:{data:string};title:string};
@@ -25,6 +25,7 @@ export type ClosingPreview={ready:boolean;preview_hash:string;program_version_id
 export type ProgramUpdatePreview={from_version_id:string;to_version_id:string;from_version:number;to_version:number;changelog:string;total_items:number;preserved_completed_items:number;preserved_session_items:number;new_required_items:number;historical_only_items:number;previous_progress:{completed_items:number;total_items:number;percent:number};updated_percent:number;preview_hash:string};
 export type ExamQuestion={prompt:string;options:string[];correct_option:number};
 export type ExamEditData={id:string;exam_key:string;version:number;pass_percent:number;questions:ExamQuestion[]};
+export type ProgramDraftItem={day:number;topic_id:string;notes:string;material_ids:string[]};
 export class LocalTrainingApi {
   private token: string | null = null;
   private verified = false;
@@ -178,6 +179,14 @@ export class LocalTrainingApi {
   async publishExam(body:{source_id?:string;exam_key:string;pass_percent:number;questions:ExamQuestion[]}) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/exams/publish',body);
+  }
+  async saveProgram(body:{source_id?:string;title:string;duration_days:number;changelog:string;items:ProgramDraftItem[]}) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/programs',body);
+  }
+  async publishProgram(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/programs/publish',{id});
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.

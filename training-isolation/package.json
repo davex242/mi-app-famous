@@ -15,7 +15,8 @@
     "start:react-local": "node react-local-runtime.mjs",
     "test:react-local": "node react-local-ui.test.mjs",
     "test:react-content": "node react-content-ui.test.mjs",
-    "test:react-exam-editor": "node react-exam-editor-ui.test.mjs"
+    "test:react-exam-editor": "node react-exam-editor-ui.test.mjs",
+    "test:react-program-editor": "node react-program-editor-ui.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",

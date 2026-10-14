@@ -7,6 +7,7 @@ import TrainingLocalLibrary from './TrainingLocalLibrary';
 import TrainingLocalQuizInvitations from './TrainingLocalQuizInvitations';
 import TrainingLocalClosing from './TrainingLocalClosing';
 import TrainingLocalUpdates from './TrainingLocalUpdates';
+import TrainingLocalProgramEditor from './TrainingLocalProgramEditor';
 const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial'];
 const value = (row: PublicRow, key: string) => typeof row[key] === 'string' || typeof row[key] === 'number' ? String(row[key]) : '—';
 const columns: Record<string, {table: string; fields: [string,string][]}> = {
@@ -64,6 +65,7 @@ export default function TrainingSandboxWorkspace() {
       {section==='Quiz final' && workspace && <TrainingLocalQuizInvitations api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Cierre' && workspace && <TrainingLocalClosing api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Actualizaciones' && workspace && <TrainingLocalUpdates api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
+      {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.current.enroll(host,program,timezone); await refresh();if(mounted.current)setNotice('Inscripción DEMO guardada.');
       });}}><h3>Inscribir emisor DEMO</h3>
