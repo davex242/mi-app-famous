@@ -29,7 +29,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const api = useRef<LocalTrainingApi>(sharedApi||(hosted?new HostedTrainingApi(hosted):new LocalTrainingApi()));
   const mounted = useRef(true);
   const [data,setData] = useState<{actor:LocalActor; workspace:LocalWorkspace}|null>(null);
-  const [section,setSection] = useState('Resumen'), [busy,setBusy] = useState(false), [error,setError] = useState('');
+  const [section,setSection] = useState(()=>{try{const saved=sessionStorage.getItem('famous_training_section');return saved&&sections.includes(saved)?saved:'Resumen';}catch{return 'Resumen';}}), [busy,setBusy] = useState(false), [error,setError] = useState('');
   const [username,setUsername] = useState(hosted?defaultEmail:''), [password,setPassword] = useState('');
   const [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
@@ -37,6 +37,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [recruiterFilter,setRecruiterFilter] = useState('');
   const [officialRoster,setOfficialRoster]=useState<Pick<Host,'id'|'host_id'|'host_name'|'reclutador'>[]>([]),[officialError,setOfficialError]=useState(''),[officialLoading,setOfficialLoading]=useState(false),[trainingIdentities,setTrainingIdentities]=useState<Record<string,unknown>[]>([]);
   const [batchLimit,setBatchLimit] = useState(25);
+  useEffect(()=>{if(hosted)sessionStorage.setItem('famous_training_section',section);},[section,hosted]);
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
     return () => {mounted.current=false;if(!sharedApi)void client.logout();};}, [sharedApi]);
