@@ -61,3 +61,9 @@ Private proxy requests carry the training bearer under `X-Training-Authorization
 ## Fixed preview gateway
 
 Nested catch-all API URLs returned HTTP 404 on the deployed Vite project before reaching Supabase. Private workspace/actions and invitation requests now use the explicit `/api/training/gateway` function with a validated `route` query parameter. Health remains `/api/training/health`. The gateway allows only the existing internal health/API path pattern and sends requests to the fixed configured backend; it accepts no arbitrary target URL. Preview/branch, origin, bearer and size guards remain enforced.
+
+## Hosted reader membership correction
+
+Real password login and private identity lookup succeeded, provisioning the confirmed initial owner as active superadmin. Workspace loading then failed because the managed `postgres` connection could not SET ROLE to `training_preview_reader`. The additive `training_preview_backend_reader_membership` migration grants this backend membership with SET TRUE and INHERIT FALSE. No authenticated/anon table privileges are added.
+
+Remote verification confirms backend SET permission, direct browser exam/private-key denial and successful scoped reader queries for all sixteen workspace tables. No content was published. This database-only correction takes effect without a frontend rebuild; final browser workspace confirmation remains pending.
