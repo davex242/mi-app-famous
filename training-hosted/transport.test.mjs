@@ -10,7 +10,10 @@ const prior={window:globalThis.window,fetch:globalThis.fetch};
 try {
   const output=join(directory,'api.mjs');
   await build({entryPoints:[new URL('../src/components/training/HostedTrainingApi.ts',import.meta.url).pathname],bundle:true,format:'esm',platform:'node',outfile:output});
-  const {HostedTrainingApi}=await import(pathToFileURL(output));
+  const {HostedTrainingApi,hostedRequestError}=await import(pathToFileURL(output));
+  assert.match(hostedRequestError(400,'Evidence file consent required').message,/Confirma/);
+  assert.match(hostedRequestError(400,'Static PDF without passwords, forms, actions or attachments required').message,/PDF debe ser estático/);
+  assert.ok(!hostedRequestError(400,'private unknown payload').message.includes('private unknown payload'));
   globalThis.window={location:{protocol:'https:',origin:'https://preview.example.invalid'}};
   const calls=[],project='https://aaaaaaaaaaaaaaaaaaaa.supabase.co';
   globalThis.fetch=async(url,options)=>{

@@ -43,5 +43,5 @@ Deno.serve(async(req:Request)=>{
    return result;
   });
   return send(200,value);
- }catch(error){const known=error instanceof ApiError;return send(known?error.status:['23505','23503','23514','40P01','55P03'].includes(error?.code)?409:503,{error:known?error.message:'Training service unavailable'});}
+ }catch(error){const known=error instanceof ApiError;if(known&&error.status===400)console.warn(JSON.stringify({event:'training_validation_rejected',route:new URL(req.url).pathname,reason:error.message.slice(0,200)}));return send(known?error.status:['23505','23503','23514','40P01','55P03'].includes(error?.code)?409:503,{error:known?error.message:'Training service unavailable'});}
 });

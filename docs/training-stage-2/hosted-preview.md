@@ -91,3 +91,7 @@ One clearly labelled synthetic host without a MICO/legacy ID is assigned to the 
 A real invitation was issued successfully, but the standalone quiz page still used the original Authorization header after the proxy was changed to the dedicated training header. It now sends `X-Training-Authorization` through the fixed gateway, keeping the token in memory and out of browser storage. Existing active invitations remain valid; duplicate issuance returns conflict by design. Lost raw links cannot be recovered from stored hashes and must be revoked/reissued without resetting the enrollment attempt budget.
 
 An independent exam-editor publication attempt produced a JSON options constraint error in the hosted runtime; correcting the Postgres JSON parameter adaptation remains pending. It did not replace the reviewed published exam, which still has fifty questions.
+
+## Evidence rejection diagnostics
+
+Evidence upload returned HTTP 400 before an evidence/review row was created; practical assessments were saved. Hosted validation failures now log only the API route and fixed validation reason, never request payloads or tokens. The client translates allowlisted field, consent, PNG/PDF/MP4 validation errors and retains generic messages for unknown responses. No validation rule or approval requirement is bypassed. Actual upload rejection diagnosis remains pending a retry showing the precise reason.

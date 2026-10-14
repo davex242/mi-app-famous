@@ -1,6 +1,30 @@
 import {LocalTrainingApi,LocalTrainingError} from './localTrainingApi';
 export type HostedTrainingConfig={enabled:boolean;url:string;key:string};
 export function hostedTrainingEnabled(config?:HostedTrainingConfig){return !!config?.enabled&&/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(config.url)&&!!config.key&&typeof window!=='undefined'&&window.location.protocol==='https:';}
+export function hostedRequestError(status:number,reason:unknown){
+ const messages:Record<string,string>={
+  'Invalid fields':'El formulario envió campos que no corresponden a esta operación.',
+  'Invalid text':'Revisa la descripción o las notas: deben contener texto y respetar el límite indicado.',
+  'Invalid ID':'Selecciona una sesión o evidencia válida y actualiza los datos.',
+  'Evidence file consent required':'Confirma que el archivo adjunto está autorizado para esta prueba.',
+  'Choose one evidence file':'Adjunta un solo archivo por evidencia.',
+  'Static PDF without passwords, forms, actions or attachments required':'El PDF debe ser estático, sin contraseña, formularios, acciones ni adjuntos.',
+  'PDF exceeds 2 MiB limit':'El PDF supera el límite de 2 MiB.',
+  'Valid RGB or RGBA PNG required':'La imagen debe ser un PNG válido en formato RGB o RGBA. Prueba a exportarla nuevamente.',
+  'PNG exceeds 2 MiB limit':'La imagen supera el límite de 2 MiB.',
+  'PNG dimensions exceed sandbox limit':'La imagen supera las dimensiones admitidas: hasta 2048 por lado y 4 millones de píxeles.',
+  'Compatible MP4 H264 with optional AAC required':'El video debe ser MP4 con H.264 y audio AAC opcional.',
+  'Video exceeds 2 MiB limit':'El video supera el límite de 2 MiB.',
+  'Video duration exceeds 60 seconds':'El video debe durar como máximo 60 segundos.',
+  'Video dimensions exceed sandbox limit':'El video debe tener hasta 1280 píxeles por lado y 921600 píxeles en total.',
+  'Invalid JSON':'No se pudo interpretar el formulario enviado.',
+  'Invalid decision':'Selecciona Aprobar o Rechazar antes de guardar la revisión.'
+ };
+ const error=new LocalTrainingError(status);
+ if(typeof reason==='string'&&messages[reason])error.message=messages[reason];
+ error.message+=' (API de capacitación: HTTP '+status+')';
+ return error;
+}
 export class HostedTrainingApi extends LocalTrainingApi{
  constructor(private config:HostedTrainingConfig){super();}
  quizUrl(token:string){return `${window.location.origin}/training-quiz/index.html#${token}`;}
@@ -11,7 +35,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
   const generation=this.generation,controller=new AbortController();this.controllers.add(controller);
   try{const response=await fetch(path==='/health'?'/api/training/health':'/api/training/gateway?route='+encodeURIComponent(path),{method:body?'POST':'GET',credentials:'same-origin',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(this.token?{'X-Training-Authorization':'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
    if(generation!==this.generation)throw new LocalTrainingError(401);
-   if(!response.ok){if(response.status===401)this.clear();const error=new LocalTrainingError(response.status);error.message+=' (API de capacitación: HTTP '+response.status+')';throw error;}
+   if(!response.ok){if(response.status===401)this.clear();let reason:unknown;try{reason=(await response.json())?.error;}catch{}throw hostedRequestError(response.status,reason);}
    const result=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);return result;
   }finally{this.controllers.delete(controller);}
  }
