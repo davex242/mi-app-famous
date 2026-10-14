@@ -50,7 +50,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!data ? <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
       const secret=password; setPassword(''); const next=await api.current.login(username,secret);
-      if (mounted.current) {setData(next);setSection('Resumen');setHost('');setProgram('');}
+      if (mounted.current) {setData(next);setSection('Resumen');setSelectedHosts([]);setProgram('');}
     });}}><h2>{hosted?'Entrar a capacitación':'Entrar con una cuenta de prueba'}</h2><p>{hosted?'Usa una cuenta de capacitación con correo confirmado. El acceso inicial de administración corresponde al correo de Dave; otros accesos requieren autorización.':'Usa las credenciales sintéticas preparadas por el servidor local.'}</p>
       <label>{hosted?'Correo de capacitación':'Usuario DEMO'}<input type={hosted?'email':'text'} required autoComplete={hosted?'username':'off'} value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/></label>
       <label>{hosted?'Contraseña de capacitación':'Contraseña DEMO'}<input required type="password" autoComplete={hosted?'current-password':'off'} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy}/></label>
