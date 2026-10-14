@@ -16,9 +16,11 @@ export class LocalTrainingError extends Error {
 export type LocalActor = {sandbox: true; role: 'superadmin' | 'subadmin' | 'edit' | 'readonly'};
 export type PublicRow = {id?: string; [key: string]: unknown};
 export type LocalWorkspace = {sandbox: true} & Record<string, PublicRow[]>;
-const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','exams','exam_attempts','closing_records','events','progress'] as const;
+const tables = ['trainees','topics','materials','program_versions','program_items','enrollments','sessions','attendance','approvals','assessments','completions','evidence','update_history','exams','exam_assignments','exam_attempts','closing_records','events','progress'] as const;
 export type AgendaParameters = {enrollment_id:string; start_date:string; local_time:string; weekdays:number[]};
 export type AgendaPreview = {preview:true; timezone:string; skipped:number; sessions:PublicRow[]; preview_hash:string};
+export type MaterialPreview = {type:'text';content:string;title:string}|{type:'link';url:string;title:string}|{type:'image';image:{data:string};title:string}|{type:'video';video:{data:string};title:string};
+export type MaterialDownload = {mime:string;content?:string;image_base64?:string;pdf_base64?:string;video_base64?:string};
 export class LocalTrainingApi {
   private token: string | null = null;
   private verified = false;
@@ -104,6 +106,22 @@ export class LocalTrainingApi {
   async completePractice(session_id:string) {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);
     await this.request('/api/items/complete',{session_id});
+  }
+  async previewMaterial(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/materials/preview',{id}) as MaterialPreview;
+  }
+  async downloadMaterial(id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/materials/download',{id}) as MaterialDownload;
+  }
+  async issueExam(enrollment_id:string, exam_version_id:string, max_attempts:number, expires_at:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    return await this.request('/api/exams/issue',{enrollment_id,exam_version_id,max_attempts,expires_at}) as {assignment:{id:string};invitation_token:string};
+  }
+  async revokeExam(assignment_id:string) {
+    if (!this.verified || !this.token) throw new LocalTrainingError(401);
+    await this.request('/api/exams/revoke',{assignment_id});
   }
   async logout() {
     // Remove UI access immediately; revoke the server session when reachable.

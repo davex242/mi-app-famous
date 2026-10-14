@@ -3,6 +3,8 @@ import {LocalTrainingApi, LocalTrainingError, LocalActor, LocalWorkspace, Public
 import './TrainingDemoWorkspace.css';
 import TrainingLocalAgenda from './TrainingLocalAgenda';
 import TrainingLocalEvidence from './TrainingLocalEvidence';
+import TrainingLocalLibrary from './TrainingLocalLibrary';
+import TrainingLocalQuizInvitations from './TrainingLocalQuizInvitations';
 const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial'];
 const value = (row: PublicRow, key: string) => typeof row[key] === 'string' || typeof row[key] === 'number' ? String(row[key]) : '—';
 const columns: Record<string, {table: string; fields: [string,string][]}> = {
@@ -53,9 +55,11 @@ export default function TrainingSandboxWorkspace() {
         <div className="td-stats"><article className="td-panel">Emisores asignados: <strong>{workspace.trainees.length}</strong></article><article className="td-panel">Inscripciones: <strong>{workspace.enrollments.length}</strong></article><article className="td-panel">Sesiones: <strong>{workspace.sessions.length}</strong></article></div>
         <h3>Inscripciones del entorno local</h3>{workspace.enrollments.length===0?<p>Aún no hay inscripciones.</p>:<ul>{workspace.enrollments.map(row=><li key={row.id}>{value(row,'host_id')} · {value(row,'status')} · {value(row,'timezone')}</li>)}</ul>}
       </>}
-      {spec && section!=='Agenda' && section!=='Evidencias' && <div className="td-table-scroll"><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {spec && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && <div className="td-table-scroll"><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
       {section==='Agenda' && workspace && <TrainingLocalAgenda api={api.current} workspace={workspace} readonly={readonly} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Evidencias' && workspace && <TrainingLocalEvidence api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
+      {section==='Biblioteca' && workspace && <TrainingLocalLibrary api={api.current} workspace={workspace} busy={busy} run={run}/> }
+      {section==='Quiz final' && workspace && <TrainingLocalQuizInvitations api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.current.enroll(host,program,timezone); await refresh();if(mounted.current)setNotice('Inscripción DEMO guardada.');
       });}}><h3>Inscribir emisor DEMO</h3>
@@ -64,7 +68,7 @@ export default function TrainingSandboxWorkspace() {
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
         <button disabled={busy || !host || !program}>Guardar inscripción DEMO</button>
       </form>}
-      {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && <p>Esta etapa permite consultar datos, inscribir emisores y gestionar agenda, asistencia y evidencias locales. Las demás acciones se conectarán en los siguientes pasos.</p>}
+      {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && <p>Esta etapa permite consultar datos, inscribir emisores y gestionar agenda, asistencia y evidencias locales. Las demás acciones se conectarán en los siguientes pasos.</p>}
     </>}
   </section>;
 }
