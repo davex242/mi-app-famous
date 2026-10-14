@@ -21,7 +21,7 @@ export default function HostedTrainingAdministration({api,role,busy,run,refresh,
  const identityConflict=!!(officialSelected&&data?.hosts.some(h=>String(h.mico_id||'')===hostMico&&String(h.legacy_host_key||'')!==officialSelected));
  const bulkCandidates=reconciliation.filter(x=>x.status==='pending'&&(!bulkRecruiter||x.host.reclutador===bulkRecruiter));
  const bulkMicoCounts=new Map<string,number>();for(const x of officialHosts){const id=String(x.host_id||'');if(id)bulkMicoCounts.set(id,(bulkMicoCounts.get(id)||0)+1);}
- const bulkValid=bulkCandidates.filter(x=>!!x.host.host_id&&/^\\d{1,32}$/.test(String(x.host.host_id))&&bulkMicoCounts.get(String(x.host.host_id))===1&&!!x.host.host_name.trim());
+ const bulkValid=bulkCandidates.filter(x=>!!x.host.host_id&&/^[0-9]{1,32}$/.test(String(x.host.host_id))&&bulkMicoCounts.get(String(x.host.host_id))===1&&!!x.host.host_name.trim());
  const bulkInvalid=bulkCandidates.filter(x=>!bulkValid.includes(x));
  const reload=async()=>{setUserConfirmed(false);setHostConfirmed(false);setData(await api.identities());};
  return <section className="td-panel" aria-label="Identidades y asignaciones de capacitación"><h3>Usuarios y emisores de capacitación</h3><p>Las cuentas deben confirmar su correo. Los IDs MICO son campos de perfil; las asignaciones usan el ID interno de capacitación. No se importan ni se modifican los registros de DatabasePad. El reclutador original del padrón de la agencia es histórico e independiente del responsable de capacitación; cambiar la asignación aquí no modifica ese origen.</p><button disabled={busy} onClick={()=>void run(reload)}>Revisar cuentas y asignaciones</button>
