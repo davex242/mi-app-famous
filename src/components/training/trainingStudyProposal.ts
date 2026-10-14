@@ -1,4 +1,4 @@
-/** Public study proposal only: no exam questions, answer keys or grading defaults. */
+/** Public study proposal only: no exam questions or answer keys; quiz policy explicitly confirmed by Dave. */
 export const trainingContentProposal = {
   "key": "agencia-inicial-propuesta-v1",
   "title": "Formación inicial de emisores · Propuesta",
@@ -6,8 +6,9 @@ export const trainingContentProposal = {
   "review_status": "pending_agency_review",
   "duration_days": 14,
   "question_count": 50,
-  "pass_percent": null,
-  "max_attempts": null,
+  "pass_percent": 75,
+  "max_attempts": 3,
+  "extra_attempts_require_preapproval": true,
   "expires_at": null,
   "units": [
     {
@@ -376,8 +377,7 @@ export const trainingContentProposal = {
     }
   ],
   "agency_decisions": [
-    "Umbral de aprobación del quiz.",
-    "Intentos permitidos y vencimiento de invitaciones.",
+    "Vencimiento de las invitaciones al quiz.",
     "Canal de soporte y responsables de seguimiento.",
     "Horarios y adaptación de la duración por emisor.",
     "Metas, cuotas, premios y condiciones oficiales, si corresponden."

@@ -108,7 +108,7 @@ Run `npm run test:react-layout` for the dedicated synthetic interface review. It
 
 ## Agency content proposal
 
-`TrainingContentProposal` displays a public study proposal in administrative Biblioteca views, including the default hosted DEMO. It contains 14 proposed study units, practices, evidence and review criteria, and a complete TXT study download. All content is explicitly a draft for agency review. It includes no exam prompts/keys and makes no API write. Passing percentage, attempt limits and expiry remain unspecified.
+`TrainingContentProposal` displays a public study proposal in administrative Biblioteca views, including the default hosted DEMO. It contains 14 proposed study units, practices, evidence and review criteria, and a complete TXT study download. All content is explicitly a draft for agency review. It includes no exam prompts/keys and makes no API write. Dave confirmed 75% approval and three initial attempts, with prior approval for extras. These values are displayed/exported by the study proposal. Content and invitation expiry remain pending. The generic local exam editor/service is unchanged; additional-attempt approval and server enforcement are pending.
 
 The separate 50-case editorial bank is retained as a private review file. GitHub repository visibility was verified as public and automatic review rejected uploading the answer bank. No new private-bank endpoint or loader is included in this public change; existing exam services and editors are unchanged. Future review/import must use appropriate private storage. The public study proposal does not contain the bank's questions, keys or rationales.
 
