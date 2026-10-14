@@ -23,15 +23,17 @@ const columns: Record<string, {table: string; fields: [string,string][]}> = {
   Cierre:{table:'closing_records',fields:[['enrollment_id','Inscripción'],['created_at','Fecha']]},
   Historial:{table:'events',fields:[['event_type','Evento'],['created_at','Fecha']]},
 };
-export default function TrainingSandboxWorkspace({hosted}:{hosted?:HostedTrainingConfig}={}) {
-  const api = useRef<LocalTrainingApi>(hosted?new HostedTrainingApi(hosted):new LocalTrainingApi());
+export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedApi,onLogout}:{hosted?:HostedTrainingConfig;defaultEmail?:string;sharedApi?:HostedTrainingApi;onLogout?:()=>void}={}) {
+  const api = useRef<LocalTrainingApi>(sharedApi||(hosted?new HostedTrainingApi(hosted):new LocalTrainingApi()));
   const mounted = useRef(true);
   const [data,setData] = useState<{actor:LocalActor; workspace:LocalWorkspace}|null>(null);
   const [section,setSection] = useState('Resumen'), [busy,setBusy] = useState(false), [error,setError] = useState('');
-  const [username,setUsername] = useState(''), [password,setPassword] = useState('');
+  const [username,setUsername] = useState(hosted?defaultEmail:''), [password,setPassword] = useState('');
   const [host,setHost] = useState(''), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
-  useEffect(() => {mounted.current=true; const client=api.current; return () => {mounted.current=false; void client.logout();};}, []);
+  useEffect(() => {mounted.current=true; const client=api.current;
+    if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
+    return () => {mounted.current=false;if(!sharedApi)void client.logout();};}, [sharedApi]);
   async function run(operation:()=>Promise<void>) {
     if (busy) return; setBusy(true); setError(''); setNotice('');
     try {await operation();} catch (reason) {
@@ -50,12 +52,12 @@ export default function TrainingSandboxWorkspace({hosted}:{hosted?:HostedTrainin
       const secret=password; setPassword(''); const next=await api.current.login(username,secret);
       if (mounted.current) {setData(next);setSection('Resumen');setHost('');setProgram('');}
     });}}><h2>{hosted?'Entrar a capacitación':'Entrar con una cuenta de prueba'}</h2><p>{hosted?'Usa una cuenta de capacitación con correo confirmado. El acceso inicial de administración corresponde al correo de Dave; otros accesos requieren autorización.':'Usa las credenciales sintéticas preparadas por el servidor local.'}</p>
-      <label>{hosted?'Correo de capacitación':'Usuario DEMO'}<input type={hosted?'email':'text'} required autoComplete="off" value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/></label>
-      <label>{hosted?'Contraseña de capacitación':'Contraseña DEMO'}<input required type="password" autoComplete="off" value={password} onChange={e=>setPassword(e.target.value)} disabled={busy}/></label>
-      <button disabled={busy}>{busy?'Conectando…':hosted?'Entrar a capacitación':'Entrar a prueba local'}</button>{hosted&&<><p>La cuenta de la app actual no se copia automáticamente. Primero crea tu cuenta de capacitación, confirma el correo y vuelve a esta pantalla.</p><button type="button" disabled={busy||!username||password.length<12} onClick={()=>void run(async()=>{const secret=password;setPassword('');await (api.current as HostedTrainingApi).register(username,secret);setNotice('Solicitud enviada. Revisa el correo de confirmación y después entra a capacitación.');})}>Crear cuenta de capacitación</button><p>Para crearla usa una contraseña de al menos 12 caracteres.</p></>}</form> : <>
+      <label>{hosted?'Correo de capacitación':'Usuario DEMO'}<input type={hosted?'email':'text'} required autoComplete={hosted?'username':'off'} value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/></label>
+      <label>{hosted?'Contraseña de capacitación':'Contraseña DEMO'}<input required type="password" autoComplete={hosted?'current-password':'off'} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy}/></label>
+      <button disabled={busy}>{busy?'Conectando…':hosted?'Entrar a capacitación':'Entrar a prueba local'}</button>{hosted&&<><p>La cuenta de la app actual no se copia automáticamente. Si ya creaste y confirmaste tu cuenta, entra con su contraseña. Después, el inicio principal del preview abrirá ambos accesos cuando las contraseñas coincidan.</p><button type="button" disabled={busy||!username||password.length<12} onClick={()=>void run(async()=>{const secret=password;setPassword('');await (api.current as HostedTrainingApi).register(username,secret);setNotice('Solicitud enviada. Revisa el correo de confirmación y después entra a capacitación.');})}>Crear cuenta de capacitación</button><p>Para crearla usa una contraseña de al menos 12 caracteres.</p></>}</form> : <>
       <div className="td-actions"><p>Permiso verificado por el servidor: <strong>{data.actor.role}</strong></p>
         <button disabled={busy} onClick={()=>void run(refresh)}>Actualizar datos</button>
-        <button disabled={busy} onClick={()=>{setData(null);setPassword('');void run(()=>api.current.logout());}}>Salir de prueba</button></div>
+        <button disabled={busy} onClick={()=>{setData(null);setPassword('');void run(async()=>{await api.current.logout();if(sharedApi)onLogout?.();});}}>{hosted?'Cerrar sesión':'Salir de prueba'}</button></div>
       <nav className="td-tabs" aria-label="Secciones de prueba">{sections.map(name=><button key={name} className={section===name?'td-active':undefined} aria-current={section===name?'page':undefined} disabled={busy} onClick={()=>setSection(name)}>{name}</button>)}</nav>
       <h2>{section}</h2>
       {section==='Resumen' && workspace && <>

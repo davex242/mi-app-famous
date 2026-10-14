@@ -15,6 +15,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
    const result=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);return result;
   }finally{this.controllers.delete(controller);}
  }
+ async resume(){return this.verified&&this.token?await this.load():null;}
  async connect(){const health=await this.request('/health') as {storage:string;initialized:boolean};if(health.storage!=='hosted-preview'||!health.initialized)throw new LocalTrainingError(503);this.verified=true;}
  async login(email:string,password:string){
   this.clear();await this.connect();const generation=this.generation;

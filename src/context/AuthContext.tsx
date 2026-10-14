@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/lib/supabase';
 import { AppUser, UserRole } from '@/types';
 import ActivityLogger from '@/lib/activityLogger';
+import {hostedTrainingConfig} from '@/components/training/hostedTrainingConfig';
+import {sharedTrainingApi,logoutSharedTraining} from '@/components/training/sharedTrainingSession';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -23,10 +25,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Hosted preview uses one fresh login and keeps its verified session in memory.
+    // A stored legacy profile alone must not restore the unified preview entry.
+    if(hostedTrainingConfig()){localStorage.removeItem('hostmanager_user');setLoading(false);return;}
     // Check for stored session
     const storedUser = localStorage.getItem('hostmanager_user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {const restored=JSON.parse(storedUser);restored.password_hash='';setUser(restored);localStorage.setItem('hostmanager_user',JSON.stringify(restored));} catch {localStorage.removeItem('hostmanager_user');}
     }
     setLoading(false);
   }, []);
@@ -45,26 +50,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Invalid credentials or account inactive' };
       }
 
+      // In the isolated hosted preview, validate both backends from this one form.
+      // The password is used for these requests only; it is never retained.
+      const training=sharedTrainingApi(hostedTrainingConfig(),email);
+      if(training){
+        try {await training.login(email,password);}
+        catch {return {success:false,error:'La app validó tus datos, pero capacitación no pudo iniciar. Ambas cuentas deben usar la misma contraseña y la cuenta de capacitación debe estar confirmada y autorizada.'};}
+      }
+      const profile={...data,password_hash:''};
+
       // Update last login
       await supabase
         .from('app_users')
         .update({ last_login: new Date().toISOString() })
         .eq('id', data.id);
 
-      setUser(data);
-      localStorage.setItem('hostmanager_user', JSON.stringify(data));
+      setUser(profile);
+      if(!training)localStorage.setItem('hostmanager_user', JSON.stringify(profile));
       
       // Log the login activity
-      await ActivityLogger.login(data);
+      await ActivityLogger.login(profile);
       
       return { success: true };
     } catch (err) {
+      await logoutSharedTraining();setUser(null);localStorage.removeItem('hostmanager_user');
       return { success: false, error: 'Login failed' };
     }
   };
 
   const logout = async () => {
-    // Log the logout activity before clearing user
+    const trainingLogout=logoutSharedTraining();
+    setUser(null);localStorage.removeItem('hostmanager_user');
+    await trainingLogout;
+    // Log the logout activity after credentials/session state is cleared
     if (user) {
       await ActivityLogger.logout(user);
     }
@@ -138,3 +156,4 @@ export function useAuth() {
   }
   return context;
 }
+

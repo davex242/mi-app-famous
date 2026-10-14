@@ -67,3 +67,13 @@ Nested catch-all API URLs returned HTTP 404 on the deployed Vite project before 
 Real password login and private identity lookup succeeded, provisioning the confirmed initial owner as active superadmin. Workspace loading then failed because the managed `postgres` connection could not SET ROLE to `training_preview_reader`. The additive `training_preview_backend_reader_membership` migration grants this backend membership with SET TRUE and INHERIT FALSE. No authenticated/anon table privileges are added.
 
 Remote verification confirms backend SET permission, direct browser exam/private-key denial and successful scoped reader queries for all sixteen workspace tables. No content was published. This database-only correction takes effect without a frontend rebuild; final browser workspace confirmation remains pending.
+
+## Unified preview entry
+
+After successful real browser training access, the user requested a single login. The preview’s primary login validates the existing app credentials and the separate confirmed training account from one form. Both passwords must match; no passwords are copied, changed or stored. The training client is shared in memory per current email/configuration and the module resumes that verified session on navigation. Main app roles remain legacy roles; training permissions always come from its current verified server actor.
+
+In the hosted preview, a stored legacy profile alone no longer restores entry after refresh: the primary login is required again. Joint logout clears the shared training token and main UI session; account changes clear the old training client. Outside the hosted preview, the old login route remains active. Legacy `password_hash` values are removed from persisted/audited session profiles.
+
+This is one entry form with two backend validations, not a migration or a shared identity provider. Neither backend’s account credentials are changed. New/other users still need confirmed and approved training accounts. If passwords differ, this preview login reports that condition rather than changing either password. The first owner has confirmed browser access and active superadmin status. Publication and an actual enrollment journey remain pending.
+
+Validation: unified-entry tests verify validation failures, current training-role isolation, session reuse without another password grant, joint logout, no password/session-token persistence and unchanged non-hosted provider behavior. Strict training TypeScript checks passed; the Vercel build verifies the full app.

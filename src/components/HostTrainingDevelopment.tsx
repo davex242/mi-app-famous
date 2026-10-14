@@ -28,15 +28,15 @@ export default function HostTrainingDevelopment() {
   if (role === 'superadmin' || role === 'subadmin') {
     title = 'Training Administration';
     subtitle = 'Programas, prácticas y evaluación en una vista DEMO.';
-    body = <TrainingAdministration />;
+    body = <TrainingAdministration defaultEmail={user?.email} />;
   } else if (role === 'edit') {
     title = 'Recruiter Training Workspace';
     subtitle = 'Tu agenda, tus emisores de ejemplo y su próximo paso.';
-    body = <RecruiterTrainingWorkspace />;
+    body = <RecruiterTrainingWorkspace defaultEmail={user?.email} />;
   } else if (role === 'readonly') {
     title = 'Recruiter Training Workspace';
     subtitle = 'Consulta de solo lectura con datos ficticios.';
-    body = <RecruiterTrainingWorkspace readOnly />;
+    body = <RecruiterTrainingWorkspace readOnly defaultEmail={user?.email} />;
   } else {
     body = (
       <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
