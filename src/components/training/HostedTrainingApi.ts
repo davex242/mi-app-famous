@@ -9,7 +9,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
   // Vercel's same-origin protection cookie unlocks the preview only.
   // The proxy forwards the training bearer, never browser cookies, to Supabase.
   const generation=this.generation,controller=new AbortController();this.controllers.add(controller);
-  try{const response=await fetch('/api/training'+path,{method:body?'POST':'GET',credentials:'same-origin',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(this.token?{'X-Training-Authorization':'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
+  try{const response=await fetch(path==='/health'?'/api/training/health':'/api/training/gateway?route='+encodeURIComponent(path),{method:body?'POST':'GET',credentials:'same-origin',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(this.token?{'X-Training-Authorization':'Bearer '+this.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
    if(generation!==this.generation)throw new LocalTrainingError(401);
    if(!response.ok){if(response.status===401)this.clear();const error=new LocalTrainingError(response.status);error.message+=' (API de capacitación: HTTP '+response.status+')';throw error;}
    const result=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);return result;

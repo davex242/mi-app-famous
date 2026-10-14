@@ -57,3 +57,7 @@ Same-origin proxy requests include the browser’s Vercel protection cookie. Pre
 The first user account was confirmed by the provider, but its confirmation redirect used the project’s default localhost URL. Before additional signups, configure the training project’s Auth Site URL/redirect allowlist for the stable preview. Do not disable confirmation or edit auth users to bypass it.
 
 Private proxy requests carry the training bearer under `X-Training-Authorization`, separate from Vercel’s deployment authorization. The server translates it to standard Authorization only for the fixed Supabase function. The original browser Authorization and Cookie headers are never forwarded. Failed HTTP calls show their status code without tokens or provider details. Provider password login succeeded during review; authenticated workspace verification remains pending the updated protected preview.
+
+## Fixed preview gateway
+
+Nested catch-all API URLs returned HTTP 404 on the deployed Vite project before reaching Supabase. Private workspace/actions and invitation requests now use the explicit `/api/training/gateway` function with a validated `route` query parameter. Health remains `/api/training/health`. The gateway allows only the existing internal health/API path pattern and sends requests to the fixed configured backend; it accepts no arbitrary target URL. Preview/branch, origin, bearer and size guards remain enforced.

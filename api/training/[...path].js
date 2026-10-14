@@ -4,7 +4,8 @@ export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  const config=previewProxyConfig(name=>process.env[name]);
  if(!config){res.statusCode=404;return res.end();}
- const path=new URL(req.url,'https://training.invalid').pathname.slice('/api/training'.length);
+ const incoming=new URL(req.url,'https://training.invalid');
+ const path=incoming.pathname==='/api/training/health'?'/health':incoming.pathname==='/api/training/gateway'?incoming.searchParams.get('route')||'':'';
  if(!/^\/(health|api\/[a-z/-]+)$/.test(path)||!['GET','POST'].includes(req.method)){res.statusCode=404;return res.end();}
  if(req.headers.origin&&req.headers.origin!==`https://${req.headers.host}`){res.statusCode=403;return res.end();}
  try{

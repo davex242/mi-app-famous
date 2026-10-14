@@ -20,7 +20,7 @@ try{
  await page.route('**/*',async route=>{const request=route.request(),url=new URL(request.url());const send=body=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
   if(url.origin==='https://hosted.preview.invalid'){
    if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:'<link rel="stylesheet" href="/bundle.css"><div id="root"></div><script src="/bundle.js"></script>'});if(url.pathname==='/bundle.js')return route.fulfill({contentType:'text/javascript',body:code});if(url.pathname==='/bundle.css')return route.fulfill({contentType:'text/css',body:css});
-   const path=url.pathname.replace('/api/training','');if(path==='/health')return send({storage:'hosted-preview',initialized:true});check(request.headers()['x-training-authorization']==='Bearer synthetic.jwt.signature','Hosted API uses only its own verified-session bearer');
+   const path=url.pathname==='/api/training/gateway'?url.searchParams.get('route'):url.pathname.replace('/api/training','');if(path==='/health')return send({storage:'hosted-preview',initialized:true});check(request.headers()['x-training-authorization']==='Bearer synthetic.jwt.signature','Hosted API uses only its own verified-session bearer');
    if(path==='/api/me')return send(await service.me('synthetic'));if(path==='/api/workspace')return send(await service.workspace('synthetic'));
    if(path.startsWith('/api/identity/'))return send(await hostedAdministration(db,actor,path,request.postDataJSON()));
   }
