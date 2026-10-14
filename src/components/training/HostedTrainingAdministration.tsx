@@ -20,7 +20,7 @@ export default function HostedTrainingAdministration({api,role,busy,run,refresh,
  const unmatchedTraining=data?.hosts.filter(x=>!officialHosts.some(h=>String(x.legacy_host_key||'')===h.id||(h.host_id&&String(x.mico_id||'')===String(h.host_id))))||[];
  const identityConflict=!!(officialSelected&&data?.hosts.some(h=>String(h.mico_id||'')===hostMico&&String(h.legacy_host_key||'')!==officialSelected));
  const bulkCandidates=reconciliation.filter(x=>x.status==='pending'&&(!bulkRecruiter||x.host.reclutador===bulkRecruiter));
- const bulkMicoCounts=new Map<string,number>();for(const x of officialHosts){const id=String(x.host.host_id||'');if(id)bulkMicoCounts.set(id,(bulkMicoCounts.get(id)||0)+1);}
+ const bulkMicoCounts=new Map<string,number>();for(const x of officialHosts){const id=String(x.host_id||'');if(id)bulkMicoCounts.set(id,(bulkMicoCounts.get(id)||0)+1);}
  const bulkValid=bulkCandidates.filter(x=>!!x.host.host_id&&/^\\d{1,32}$/.test(String(x.host.host_id))&&bulkMicoCounts.get(String(x.host.host_id))===1&&!!x.host.host_name.trim());
  const bulkInvalid=bulkCandidates.filter(x=>!bulkValid.includes(x));
  const reload=async()=>{setUserConfirmed(false);setHostConfirmed(false);setData(await api.identities());};
