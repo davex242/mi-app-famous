@@ -1,7 +1,7 @@
 import {preparePrivateImage} from './preparePrivateImage';
 import TrainingLocalAssessment from './TrainingLocalAssessment';
 import React, {useEffect,useRef,useState} from 'react';
-import {EvidencePreview,LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
+import {EvidencePreview,LocalTrainingError,LocalActor,LocalTrainingApi,LocalWorkspace,PublicRow} from './localTrainingApi';
 const text=(row:PublicRow,key:string)=>typeof row[key]==='string'?row[key] as string:'';
 const labels:Record<string,string>={pending:'Pendiente',approved:'Aprobada',rejected:'Rechazada'};
 const MAX_BYTES=2*1024*1024;
@@ -27,6 +27,7 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
   const [filter,setFilter]=useState(''),[sessionId,setSessionId]=useState(''),[description,setDescription]=useState('');
   const [file,setFile]=useState<File|null>(null),[consent,setConsent]=useState(false),[fileError,setFileError]=useState('');
   const [notes,setNotes]=useState<Record<string,string>>({}),[decisions,setDecisions]=useState<Record<string,string>>({});
+  const [selectedEvidence,setSelectedEvidence]=useState<string[]>([]),[batchDecision,setBatchDecision]=useState(''),[batchNotes,setBatchNotes]=useState(''),[batchResults,setBatchResults]=useState<{id:string;ok:boolean;message:string}[]>([]);
   const fileInput=useRef<HTMLInputElement>(null),dialog=useRef<HTMLDialogElement>(null),video=useRef<HTMLVideoElement>(null);
   const [preview,setPreview]=useState<{data:EvidencePreview;workspace:LocalWorkspace;videoUrl?:string}|null>(null);
   const mounted=useRef(true);
@@ -66,6 +67,26 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
       </form>}
     </article>)}
     {!workspace.evidence.some(row=>!filter||row.status===filter)&&<p>Sin evidencias para este filtro.</p>}
+    {admin&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
+      const results:{id:string;ok:boolean;message:string}[]=[];
+      const eligible=workspace.evidence.filter(row=>row.status==='pending'&&active(row.enrollment_id));
+      for(const id of selectedEvidence.filter(id=>eligible.some(row=>row.id===id))){
+        try{await api.reviewEvidence(id,batchDecision,batchNotes);results.push({id,ok:true,message:'Revisión guardada'});}
+        catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;results.push({id,ok:false,message:reason instanceof Error?reason.message:'No se pudo revisar'});}
+      }
+      setBatchResults(results);setSelectedEvidence([]);await refresh();notify(`Revisión masiva: ${results.filter(row=>row.ok).length} guardadas, ${results.filter(row=>!row.ok).length} fallidas.`);
+    });}}><h3>Revisar evidencias de varios emisores</h3>
+      <p>La decisión se aplica únicamente a las evidencias pendientes seleccionadas. Cada evidencia mantiene su ficha, historial y validaciones individuales.</p>
+      <fieldset disabled={busy}><legend>Evidencias seleccionadas: {selectedEvidence.length}</legend>
+        <button type="button" disabled={busy} onClick={()=>setSelectedEvidence(workspace.evidence.filter(row=>row.status==='pending'&&active(row.enrollment_id)&&(!filter||row.status===filter)).map(row=>row.id!))}>Seleccionar pendientes visibles</button>
+        <button type="button" disabled={busy} onClick={()=>setSelectedEvidence([])}>Limpiar selección</button>
+        {workspace.evidence.filter(row=>row.status==='pending'&&active(row.enrollment_id)&&(!filter||row.status===filter)).map(row=><label key={row.id} className="td-weekday"><input type="checkbox" checked={selectedEvidence.includes(row.id!)} onChange={event=>setSelectedEvidence(current=>event.target.checked?[...current,row.id!]:current.filter(id=>id!==row.id))}/>{sessionLabel(row.session_id)} · {text(row,'description')}</label>)}
+      </fieldset>
+      <label>Decisión<select aria-label="Decisión masiva de evidencia" required disabled={busy} value={batchDecision} onChange={e=>setBatchDecision(e.target.value)}><option value="">Selecciona una decisión</option><option value="approved">Aprobar</option><option value="rejected">Rechazar</option></select></label>
+      <label>Notas de revisión<textarea aria-label="Notas de revisión masiva" required maxLength={2000} disabled={busy} value={batchNotes} onChange={e=>setBatchNotes(e.target.value)}/></label>
+      <button disabled={busy||!selectedEvidence.length||!batchDecision||!batchNotes.trim()}>Revisar {selectedEvidence.length} evidencia(s)</button>
+      {!!batchResults.length&&<div role="status"><h4>Resultados individuales</h4><ul>{batchResults.map(row=><li key={row.id}>{sessionLabel(workspace.evidence.find(e=>e.id===row.id)?.session_id)}: {row.message}</li>)}</ul></div>}
+    </form>}
     {!readonly&&<form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
       let prepared={};if(file){try{prepared=await attachment(file);}catch(e){setFileError(e instanceof Error?e.message:'No se pudo preparar el archivo.');return;}}
       await api.submitEvidence({session_id:sessionId,description,...(file?{...prepared,consent_confirmed:consent}:{})});
