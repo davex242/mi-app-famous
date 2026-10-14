@@ -29,7 +29,7 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
   const [data,setData] = useState<{actor:LocalActor; workspace:LocalWorkspace}|null>(null);
   const [section,setSection] = useState('Resumen'), [busy,setBusy] = useState(false), [error,setError] = useState('');
   const [username,setUsername] = useState(hosted?defaultEmail:''), [password,setPassword] = useState('');
-  const [host,setHost] = useState(''), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
+  const [host,setHost] = useState(''), [selectedHosts,setSelectedHosts] = useState<string[]>([]), [batchResults,setBatchResults] = useState<{hostId:string;ok:boolean;message:string}[]>([]), [program,setProgram] = useState(''), [timezone,setTimezone] = useState('America/Costa_Rica');
   const [notice,setNotice] = useState('');
   useEffect(() => {mounted.current=true; const client=api.current;
     if(sharedApi)void run(async()=>{const resumed=await sharedApi.resume();if(resumed&&mounted.current)setData(resumed);});
@@ -74,12 +74,25 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
       {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
-        await api.current.enroll(host,program,timezone); await refresh();if(mounted.current)setNotice('Inscripción DEMO guardada.');
-      });}}><h3>Inscribir emisor DEMO</h3>
-        <label>Emisor DEMO<select aria-label="Emisor DEMO" required value={host} onChange={e=>setHost(e.target.value)} disabled={busy}><option value="">Selecciona un emisor</option>{workspace.trainees.map(row=><option key={value(row,'host_id')} value={value(row,'host_id')}>{value(row,'label')}</option>)}</select></label>
+        const targets=selectedHosts.length?selectedHosts:(host?[host]:[]);
+        const outcomes:{hostId:string;ok:boolean;message:string}[]=[];
+        for(const hostId of targets){
+          try{await api.current.enroll(hostId,program,timezone);outcomes.push({hostId,ok:true,message:'Inscrito'});}
+          catch(reason){if(reason instanceof LocalTrainingError&&[401,403].includes(reason.status))throw reason;outcomes.push({hostId,ok:false,message:reason instanceof LocalTrainingError?reason.message:'No se pudo inscribir'});}
+        }
+        setBatchResults(outcomes);await refresh();
+        if(mounted.current)setNotice(`Inscripciones: ${outcomes.filter(row=>row.ok).length} correctas, ${outcomes.filter(row=>!row.ok).length} pendientes de revisión.`);
+      });}}><h3>Inscribir emisores</h3>
+        <p>Selecciona uno o varios emisores. Cada inscripción se guarda por separado y conserva su historial individual. Los errores no cancelan las inscripciones correctas.</p>
+        <fieldset disabled={busy}><legend>Emisores ({selectedHosts.length} seleccionados)</legend>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts(workspace.trainees.map(row=>value(row,'host_id')).filter(id=>id!=='—'))}>Seleccionar todos los visibles</button>
+          <button type="button" disabled={busy} onClick={()=>setSelectedHosts([])}>Limpiar selección</button>
+          {workspace.trainees.map(row=>{const id=value(row,'host_id');return <label key={id} className="td-weekday"><input type="checkbox" checked={selectedHosts.includes(id)} onChange={event=>setSelectedHosts(current=>event.target.checked?[...current,id]:current.filter(item=>item!==id))}/>{value(row,'label')}</label>;})}
+        </fieldset>
         <label>Programa publicado<select aria-label="Programa publicado" required value={program} onChange={e=>setProgram(e.target.value)} disabled={busy}><option value="">Selecciona un programa</option>{workspace.program_versions.filter(row=>row.status==='published').map(row=><option key={row.id} value={row.id}>{value(row,'title')} · v{value(row,'version')}</option>)}</select></label>
         <label>Zona horaria<select aria-label="Zona horaria" value={timezone} onChange={e=>setTimezone(e.target.value)} disabled={busy}>{['America/Costa_Rica','America/Bogota','America/Mexico_City','UTC'].map(zone=><option key={zone}>{zone}</option>)}</select></label>
-        <button disabled={busy || !host || !program}>Guardar inscripción DEMO</button>
+        <button disabled={busy||!selectedHosts.length||!program}>Inscribir {selectedHosts.length} emisor(es)</button>
+        {!!batchResults.length&&<div role="status"><h4>Resultado por emisor</h4><ul>{batchResults.map((row,index)=><li key={row.hostId+'-'+index}>{hostLabel(row.hostId)}: {row.message}</li>)}</ul></div>}
       </form>}
       {section!=='Resumen' && section!=='Historial' && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <p>Cada inscripción conserva su versión del programa. Publicar una versión nueva permite revisarla después en Actualizaciones.</p>}
     </>}
