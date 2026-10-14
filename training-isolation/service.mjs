@@ -1,3 +1,4 @@
+import {createAcceptedCourseOperations} from './accepted-course.mjs';
 import {examAttemptBudget} from './exam-attempts.mjs';
 import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -73,6 +74,7 @@ export function createTrainingService(db) {
     }
   }
   return {
+    ...createAcceptedCourseOperations(run,{requireAdmin,fields,text,fail,audit}),
     ...createCatalogueOperations(run, { requireAdmin, fields, text, uuid, fail, audit, admin }),
     ...createProgramOperations(run, { fields, text, uuid, fail, requireAdmin, requireWrite, enrollment, session, audit }),
     ...createUpdateOperations(run,{fields,uuid,fail,requireWrite,enrollment,audit}),

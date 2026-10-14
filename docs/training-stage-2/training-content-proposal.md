@@ -400,7 +400,7 @@ El banco privado se validó por separado: exactamente 50 IDs/enunciados distinto
 
 ## Revisión necesaria antes de usarlo como material oficial
 
-El contenido está aceptado para la versión inicial de prueba. Sigue pendiente cargar los 14 temas/materiales y el programa como borradores del catálogo local, y resolver la carga del banco de preguntas desde un destino privado adecuado. Las adaptaciones de datos propios de la agencia pueden hacerse mediante revisiones editables. Los enlaces nuevos vencerán a las 24 horas desde emisión, calculadas por servidor. La autorización previa y el control del cupo están implementados localmente. Este paso no asigna programas a emisores ni modifica main, el login, almacenamiento o DatabasePad/Vercel de producción.
+El contenido está aceptado para la versión inicial de prueba. La carga de los 14 temas/materiales y el programa como borradores ya está implementada en Biblioteca de la prueba local. Sigue pendiente la carga del banco privado y la publicación separada del catálogo. Las adaptaciones de datos propios de la agencia pueden hacerse mediante revisiones editables. Los enlaces nuevos vencerán a las 24 horas desde emisión, calculadas por servidor. La autorización previa y el control del cupo están implementados localmente. Este paso no asigna programas a emisores ni modifica main, el login, almacenamiento o DatabasePad/Vercel de producción.
 
 ## Política confirmada por Dave — 2026-10-13
 
@@ -411,3 +411,11 @@ La aprobación de extras deberá registrarse por administración con cantidad, m
 ## Vencimiento confirmado — 2026-10-13
 
 Las invitaciones nuevas duran 24 horas exactas desde la emisión del servidor. El reloj del dispositivo y una fecha enviada por el navegador no pueden extenderlas. Se conservan los timestamps de invitaciones anteriores. El vencimiento impide iniciar, retomar o enviar respuestas con ese enlace; no borra el historial, no devuelve intentos consumidos ni reinicia el cupo al renovar.
+
+## Carga en el catálogo local
+
+Solo superadmin y subadmin con sesión sintética verificada pueden usar **Biblioteca → Preparar catálogo inicial → Revisar carga → Confirmar → Cargar en borrador**. La vista previa muestra cantidades, permisos de materiales y política de quiz. La confirmación queda ligada al catálogo consultado; actualizar datos obliga a revisar de nuevo.
+
+El servidor utiliza la misma fuente pública de estudio que la interfaz. No recibe contenido editable, cantidades ni IDs del navegador: solo el hash esperado y la confirmación. Crea atómicamente 14 temas, 14 documentos de texto con vista previa/descarga y un programa de 14 días con 14 prácticas, todas con evidencia/evaluación obligatorias y referencias exactas a sus revisiones. Todo permanece en borrador. Se registra quién cargó la fuente, su hash y las referencias.
+
+Repetir o reiniciar la carga devuelve el programa original; no duplica datos ni reemplaza ediciones. Un error durante la carga revierte toda la operación. Publicar continúa por acciones separadas: primero temas, luego materiales, finalmente programa. La carga no crea exámenes, no asigna emisores ni actualiza entrenamientos en curso. El banco de respuestas permanece separado.

@@ -1,3 +1,4 @@
+export type AcceptedCoursePreview={source_key:string;source_hash:string;title:string;duration_days:number;topics:number;materials:number;practices:number;material_kind:'text';allow_preview:true;allow_download:true;policy:{pass_percent:number;initial_attempts:number;extra_attempts_require_preapproval:boolean;invitation_hours:number};state:'ready'|'already_loaded'|'conflict';program_id:string|null;program_status:string|null};
 export type EvidencePreview={type:'image';image:{data:string}}|{type:'video';video:{data:string}};
 /** Local synthetic API only. The existing application's identity is never sent. */
 export function localTrainingEnabled() {
@@ -178,6 +179,12 @@ export class LocalTrainingApi {
   }
   async reviewExtraAttempts(enrollment_id:string,request_id:string,decision:string,review_notes:string) {
     await this.request('/api/exams/extra-review',{enrollment_id,request_id,decision,review_notes});
+  }
+  async previewAcceptedCourse() {
+    return await this.request('/api/content-import/preview',{}) as AcceptedCoursePreview;
+  }
+  async loadAcceptedCourse(expected_hash:string) {
+    return await this.request('/api/content-import/load',{expected_hash,confirmed:true}) as AcceptedCoursePreview&{already_loaded:boolean};
   }
   async examTemplate() {
     if (!this.verified || !this.token) throw new LocalTrainingError(401);

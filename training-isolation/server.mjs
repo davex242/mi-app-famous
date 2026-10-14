@@ -68,6 +68,7 @@ export function createSandboxHttpServer(service,{storage='memory',reactAssets=nu
       if (req.method === 'GET' && path === '/api/enrollments') return send(200, await service.listEnrollments(token));
       if (req.method === 'GET' && path === '/api/workspace') return send(200, await service.workspace(token));
       const routes = {
+        '/api/content-import/preview':'previewAcceptedCourse', '/api/content-import/load':'loadAcceptedCourse',
         '/api/training/closing-preview':'previewClosing', '/api/training/complete':'completeTraining',
         '/api/training/closing-export':'exportClosing',
         '/api/exams/edit-data':'examEditData', '/api/exams/template':'examTemplate', '/api/exams/publish':'publishExam', '/api/exams/issue':'issueExam', '/api/exams/revoke':'revokeExam', '/api/exams/extra-request':'requestExtraAttempts', '/api/exams/extra-review':'reviewExtraAttempts',
