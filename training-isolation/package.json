@@ -26,7 +26,10 @@
     "test:react-catalogue-import": "node react-catalogue-import-ui.test.mjs",
     "test:private-exam-import": "node private-exam-import.test.mjs",
     "test:accepted-journey": "node accepted-training-journey.test.mjs",
-    "test:identity-contract": "node integration-identity.test.mjs"
+    "test:identity-contract": "node integration-identity.test.mjs",
+    "start:react-persistent": "node react-persistent-runtime.mjs",
+    "prepare:accepted-local": "node prepare-accepted-local.mjs",
+    "test:accepted-local-setup": "node accepted-local-setup.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.9",

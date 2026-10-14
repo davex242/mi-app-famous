@@ -21,11 +21,11 @@ export async function preparePersistentDemo(db,password) {
   });
 }
 
-export async function startPersistentSandbox(store='demo',password,port=4317) {
+export async function startPersistentSandbox(store='demo',password,port=4317,{reactAssets=null}={}) {
   const local=await openPersistentSandbox(store);let server;
   try{
     const fixture=await preparePersistentDemo(local.db,password);
-    server=createSandboxHttpServer(createTrainingService(local.db),{storage:'local-persistent'});
+    server=createSandboxHttpServer(createTrainingService(local.db),{storage:'local-persistent',reactAssets});
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',()=>{server.removeListener('error',reject);resolve();});});
     let closed=false;
     return {...local,server,fixture,async close(){if(closed)return;closed=true;try{await new Promise(r=>{server.close(r);server.closeAllConnections();});}finally{await local.close();}}};
