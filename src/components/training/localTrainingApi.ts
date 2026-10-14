@@ -29,16 +29,17 @@ export type ExamQuestion={prompt:string;options:string[];correct_option:number};
 export type ExamEditData={id:string;exam_key:string;version:number;pass_percent:number;questions:ExamQuestion[]};
 export type ProgramDraftItem={day:number;topic_id:string;notes:string;material_ids:string[]};
 export class LocalTrainingApi {
-  private token: string | null = null;
-  private verified = false;
-  private generation = 0;
-  private controllers = new Set<AbortController>();
+  protected token: string | null = null;
+  protected verified = false;
+  protected generation = 0;
+  protected controllers = new Set<AbortController>();
+  quizUrl(token:string){return `${window.location.origin}/quiz#${token}`;}
   clear() {
     this.generation++; this.token = null; this.verified = false;
     for (const controller of this.controllers) controller.abort();
     this.controllers.clear();
   }
-  private async request(path: string, body?: object): Promise<unknown> {
+  protected async request(path: string, body?: object): Promise<unknown> {
     if (!localTrainingEnabled()) throw new LocalTrainingError(403);
     const generation = this.generation, controller = new AbortController();
     this.controllers.add(controller);

@@ -1,6 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {LocalTrainingApi, LocalTrainingError, LocalActor, LocalWorkspace, PublicRow} from './localTrainingApi';
 import './TrainingDemoWorkspace.css';
+import HostedTrainingAdministration from './HostedTrainingAdministration';
+import {HostedTrainingApi,HostedTrainingConfig} from './HostedTrainingApi';
 import TrainingLocalAgenda from './TrainingLocalAgenda';
 import TrainingLocalEvidence from './TrainingLocalEvidence';
 import TrainingLocalLibrary from './TrainingLocalLibrary';
@@ -21,8 +23,8 @@ const columns: Record<string, {table: string; fields: [string,string][]}> = {
   Cierre:{table:'closing_records',fields:[['enrollment_id','Inscripción'],['created_at','Fecha']]},
   Historial:{table:'events',fields:[['event_type','Evento'],['created_at','Fecha']]},
 };
-export default function TrainingSandboxWorkspace() {
-  const api = useRef(new LocalTrainingApi());
+export default function TrainingSandboxWorkspace({hosted}:{hosted?:HostedTrainingConfig}={}) {
+  const api = useRef<LocalTrainingApi>(hosted?new HostedTrainingApi(hosted):new LocalTrainingApi());
   const mounted = useRef(true);
   const [data,setData] = useState<{actor:LocalActor; workspace:LocalWorkspace}|null>(null);
   const [section,setSection] = useState('Resumen'), [busy,setBusy] = useState(false), [error,setError] = useState('');
@@ -34,7 +36,7 @@ export default function TrainingSandboxWorkspace() {
     if (busy) return; setBusy(true); setError(''); setNotice('');
     try {await operation();} catch (reason) {
       if (mounted.current) {if (reason instanceof LocalTrainingError && [401,403].includes(reason.status)) {setData(null); void api.current.logout();}
-        setError(reason instanceof LocalTrainingError ? reason.message : 'No se pudo conectar con la API local. Comprueba que esté disponible.');}
+        setError(reason instanceof LocalTrainingError ? reason.message : hosted?'No se pudo conectar al backend de capacitación. Intenta nuevamente.':'No se pudo conectar con la API local. Comprueba que esté disponible.');}
     } finally {if (mounted.current) setBusy(false);}
   }
   async function refresh() {const next=await api.current.load(); if (mounted.current) setData(next);}
@@ -42,15 +44,15 @@ export default function TrainingSandboxWorkspace() {
   const hostLabel=(id:unknown)=>{const trainee=workspace?.trainees.find(row=>row.host_id===id);return trainee?value(trainee,'label'):'Emisor DEMO';};
   const spec=columns[section], rows=workspace && spec ? workspace[spec.table] : [];
   return <section className="training-demo td-local" aria-label="Training API local">
-    <div className="td-notice"><strong>PRUEBA LOCAL · API de entrenamiento</strong><p>Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.</p></div>
+    <div className="td-notice"><strong>{hosted?'PREVIEW · Capacitación con datos persistentes':'PRUEBA LOCAL · API de entrenamiento'}</strong><p>{hosted?'Este módulo usa el Supabase separado de capacitación y una sesión propia verificada. Los registros existentes de la app continúan en su backend actual.':'Solo cuentas y datos ficticios. Los cambios DEMO se guardan en este entorno local. La base actual de la app no se utiliza.'}</p></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!data ? <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
       const secret=password; setPassword(''); const next=await api.current.login(username,secret);
       if (mounted.current) {setData(next);setSection('Resumen');setHost('');setProgram('');}
-    });}}><h2>Entrar con una cuenta de prueba</h2><p>Usa las credenciales sintéticas preparadas por el servidor local.</p>
-      <label>Usuario DEMO<input required autoComplete="off" value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/></label>
-      <label>Contraseña DEMO<input required type="password" autoComplete="off" value={password} onChange={e=>setPassword(e.target.value)} disabled={busy}/></label>
-      <button disabled={busy}>{busy?'Conectando…':'Entrar a prueba local'}</button></form> : <>
+    });}}><h2>{hosted?'Entrar a capacitación':'Entrar con una cuenta de prueba'}</h2><p>{hosted?'Usa una cuenta de capacitación con correo confirmado. El acceso inicial de administración corresponde al correo de Dave; otros accesos requieren autorización.':'Usa las credenciales sintéticas preparadas por el servidor local.'}</p>
+      <label>{hosted?'Correo de capacitación':'Usuario DEMO'}<input type={hosted?'email':'text'} required autoComplete="off" value={username} onChange={e=>setUsername(e.target.value)} disabled={busy}/></label>
+      <label>{hosted?'Contraseña de capacitación':'Contraseña DEMO'}<input required type="password" autoComplete="off" value={password} onChange={e=>setPassword(e.target.value)} disabled={busy}/></label>
+      <button disabled={busy}>{busy?'Conectando…':hosted?'Entrar a capacitación':'Entrar a prueba local'}</button>{hosted&&<><p>La cuenta de la app actual no se copia automáticamente. Primero crea tu cuenta de capacitación, confirma el correo y vuelve a esta pantalla.</p><button type="button" disabled={busy||!username||password.length<12} onClick={()=>void run(async()=>{const secret=password;setPassword('');await (api.current as HostedTrainingApi).register(username,secret);setNotice('Solicitud enviada. Revisa el correo de confirmación y después entra a capacitación.');})}>Crear cuenta de capacitación</button><p>Para crearla usa una contraseña de al menos 12 caracteres.</p></>}</form> : <>
       <div className="td-actions"><p>Permiso verificado por el servidor: <strong>{data.actor.role}</strong></p>
         <button disabled={busy} onClick={()=>void run(refresh)}>Actualizar datos</button>
         <button disabled={busy} onClick={()=>{setData(null);setPassword('');void run(()=>api.current.logout());}}>Salir de prueba</button></div>
@@ -67,6 +69,7 @@ export default function TrainingSandboxWorkspace() {
       {section==='Quiz final' && workspace && <TrainingLocalQuizInvitations api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Cierre' && workspace && <TrainingLocalClosing api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Actualizaciones' && workspace && <TrainingLocalUpdates api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
+      {hosted&&section==='Programas'&&workspace&&(data.actor.role==='superadmin'||data.actor.role==='subadmin')&&<HostedTrainingAdministration api={api.current as HostedTrainingApi} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/>}
       {section==='Programas' && workspace && (data.actor.role==='superadmin'||data.actor.role==='subadmin') && <TrainingLocalProgramEditor api={api.current} workspace={workspace} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Programas' && workspace && !readonly && <form className="td-panel" onSubmit={event=>{event.preventDefault();void run(async()=>{
         await api.current.enroll(host,program,timezone); await refresh();if(mounted.current)setNotice('Inscripción DEMO guardada.');

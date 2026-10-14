@@ -40,3 +40,9 @@ The accepted fourteen-day course and private-file exam have now been published a
 ## Steps 1–5 requested for completion
 
 See `production-connection-status.md` for the exact boundary. A persistent native React review runtime and atomic repeat-safe private-file course preparation are implemented and tested (15 checks). The actual reviewed bank and catalogue are published in a separate persistent local review store and saved privately as a restore bundle. Actual backend verification, hosted identity, hosted storage and staging integration remain blocked by unavailable access; they are not marked complete. Main and the existing application remain unchanged.
+
+## Separate hosted preview implementation
+
+Access is now verified to the separate training Supabase and Vercel projects. The standalone training schema/API and preview-only React proxy are implemented; see `hosted-preview.md`. The study catalogue is loaded as drafts. Automatic approval review blocked persistent publication of catalogue/exam; no hosted answer bank was uploaded. The first verified training account, reviewed profiles/assignments, authenticated hosted journey and explicit publication approval remain pending. The existing DatabasePad schema/session mechanism is still unverified and untouched.
+
+Stage 1: save source with private runtime configuration; stage 2: configure and verify hosted preview; stage 3: authenticated journey; stage 4: explicitly approved content publication; stage 5: production rollout and rollback review.

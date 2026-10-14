@@ -19,7 +19,7 @@ export default function TrainingLocalQuizInvitations({api,workspace,role,busy,ru
     {!readonly&&<form className="td-panel" onSubmit={event=>{event.preventDefault();if(!valid)return;setInvitation(null);void run(async()=>{
       const result=await api.issueExam(enrollmentId,examId,Number(attempts));
       if(!/^[A-Za-z0-9_-]{43}$/.test(result.invitation_token))throw Error('Invalid invitation');
-      await refresh();setInvitation({id:result.assignment.id,url:`${window.location.origin}/quiz#${result.invitation_token}`});notify('Invitación DEMO creada. Conserva el enlace; no se recupera al recargar.');
+      await refresh();setInvitation({id:result.assignment.id,url:api.quizUrl(result.invitation_token)});notify('Invitación DEMO creada. Conserva el enlace; no se recupera al recargar.');
     });}}><h3>Crear invitación DEMO</h3>
       <label>Inscripción para quiz<select aria-label="Inscripción para quiz" required disabled={busy} value={enrollmentId} onChange={e=>setEnrollmentId(e.target.value)}><option value="">Selecciona una inscripción activa</option>{workspace.enrollments.filter(row=>row.status==='active').map(row=><option key={row.id} value={row.id}>{label(row.id)}</option>)}</select></label>
       <label>Examen publicado<select aria-label="Examen publicado" required disabled={busy} value={examId} onChange={e=>setExamId(e.target.value)}><option value="">Selecciona un examen</option>{workspace.exams.map(row=><option key={row.id} value={row.id}>{text(row,'exam_key')} · v{String(row.version)} · {String(row.pass_percent)} %</option>)}</select></label>

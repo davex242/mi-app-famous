@@ -55,8 +55,10 @@ async function session(tx, actor, key) {
   return rows[0];
 }
 
-export function createTrainingService(db) {
+export function createTrainingService(db,{verifiedActor=null,readerRole='authenticated'}={}) {
+  if(!['authenticated','training_preview_reader'].includes(readerRole))throw new TypeError('Invalid training reader role');
   async function actorFor(tx, token) {
+    if(verifiedActor){const actor=await verifiedActor(tx,token);if(!actor||!actor.auth_user_id||!actor.app_user_id||!['superadmin','subadmin','edit','readonly'].includes(actor.role))fail(401,'Verified training identity required');return actor;}
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) fail(401, 'Authentication required');
     const { rows } = await tx.query(`select p.auth_user_id,p.app_user_id,p.role from training_private.local_sessions s
       join training_private.training_principals p on p.auth_user_id=s.auth_user_id
@@ -107,7 +109,7 @@ export function createTrainingService(db) {
     }),
     listEnrollments: token => run(token, async (tx, actor) => {
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
-      await tx.exec('set local role authenticated');
+      await tx.exec(`set local role ${readerRole}`);
       return (await tx.query('select * from public.training_enrollments order by started_at,id')).rows;
     }),
     workspace: token => run(token, async (tx, actor) => {
@@ -123,7 +125,7 @@ export function createTrainingService(db) {
         join public.training_exam_assignments a on a.id=t.assignment_id join training_private.training_host_assignments h on h.host_id=a.host_id
         where $1::boolean or h.recruiter_id=$2`,[admin(actor),actor.app_user_id])).rows;
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
-      await tx.exec('set local role authenticated');
+      await tx.exec(`set local role ${readerRole}`);
       const result = { sandbox: true, exams,closing_records:closingRecords, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
       for (const table of ['topics', 'materials', 'program_versions', 'program_items', 'program_materials', 'enrollments', 'update_history', 'sessions', 'attendance', 'evidence', 'assessments', 'approvals', 'completions', 'events']) {
         // Static table allowlist; never accepts a table name from a caller.
