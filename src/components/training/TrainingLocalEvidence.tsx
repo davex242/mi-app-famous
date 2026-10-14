@@ -7,7 +7,7 @@ const labels:Record<string,string>={pending:'Pendiente',approved:'Aprobada',reje
 const MAX_BYTES=2*1024*1024;
 async function attachment(file:File) {
   if(!file.size||file.size>MAX_BYTES)throw Error('Invalid evidence file size');
-  if(['image/png','image/jpeg'].includes(file.type))return {image_base64:(await preparePrivateImage(file)).base64};
+  if(['image/png','image/jpeg','image/webp'].includes(file.type))return {image_base64:(await preparePrivateImage(file)).base64};
   const bytes=new Uint8Array(await file.arrayBuffer());
   let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
   const data=btoa(binary);
@@ -73,11 +73,11 @@ export default function TrainingLocalEvidence({api,workspace,role,busy,run,refre
     });}}><h3>Enviar evidencia DEMO</h3>
       <label>Sesión de evidencia<select aria-label="Sesión de evidencia" required value={sessionId} disabled={busy} onChange={e=>setSessionId(e.target.value)}><option value="">Selecciona una sesión activa</option>{workspace.sessions.filter(row=>active(row.enrollment_id)).map(row=><option key={row.id} value={row.id}>{sessionLabel(row.id)}</option>)}</select></label>
       <label>Descripción de evidencia<textarea aria-label="Descripción de evidencia" required maxLength={2000} disabled={busy} value={description} onChange={e=>setDescription(e.target.value)}/></label>
-      <label>Archivo DEMO opcional<input aria-label="Archivo DEMO opcional" ref={fileInput} type="file" accept="image/png,image/jpeg,application/pdf,video/mp4" disabled={busy} onChange={e=>{
+      <label>Archivo DEMO opcional<input aria-label="Archivo DEMO opcional" ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf,video/mp4" disabled={busy} onChange={e=>{
         const next=e.target.files?.[0]??null;setConsent(false);setFileError('');setFile(null);
-        if(next&&(!next.size||next.size>MAX_BYTES||!['image/png','image/jpeg','application/pdf','video/mp4'].includes(next.type))){setFileError('Elige un PNG/JPEG, PDF o MP4 de hasta 2 MiB.');e.target.value='';return;}setFile(next);
+        if(next&&(!next.size||next.size>MAX_BYTES||!['image/png','image/jpeg','image/webp','application/pdf','video/mp4'].includes(next.type))){setFileError('Elige un PNG/JPEG/WebP, PDF o MP4 de hasta 2 MiB.');e.target.value='';return;}setFile(next);
       }}/></label>
-      <p>Usa archivos ficticios: PNG/JPEG, PDF estático o MP4 H.264, hasta 2 MiB. JPEG se convierte a PNG de hasta 768 píxeles por lado, conservando sus proporciones. El servidor valida el contenido. La aprobación de evidencia no completa por sí sola una práctica.</p>
+      <p>Usa archivos ficticios: PNG/JPEG/WebP, PDF estático o MP4 H.264, hasta 2 MiB. Las imágenes se convierten a PNG de hasta 768 píxeles por lado, conservando sus proporciones. El servidor valida el contenido. La aprobación de evidencia no completa por sí sola una práctica.</p>
       {fileError&&<p role="alert">{fileError}</p>}
       {file&&<label className="td-weekday"><input aria-label="Confirmo uso de archivo ficticio" type="checkbox" required checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/>Confirmo que el archivo es ficticio y autorizado para esta prueba local.</label>}
       <button disabled={busy||!sessionId||!description.trim()||!!fileError||(!!file&&!consent)}>Enviar evidencia a revisión DEMO</button>

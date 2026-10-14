@@ -95,3 +95,11 @@ An independent exam-editor publication attempt produced a JSON options constrain
 ## Evidence rejection diagnostics
 
 Evidence upload returned HTTP 400 before an evidence/review row was created; practical assessments were saved. Hosted validation failures now log only the API route and fixed validation reason, never request payloads or tokens. The client translates allowlisted field, consent, PNG/PDF/MP4 validation errors and retains generic messages for unknown responses. No validation rule or approval requirement is bypassed. Actual upload rejection diagnosis remains pending a retry showing the precise reason.
+
+## Portable image normalization and runtime validation
+
+The hosted diagnostic rejected a known-good RGB/RGBA PNG: the Edge Node zlib compatibility layer did not satisfy the parser’s bounded-info/consumed-byte contract. The Edge build now substitutes a pinned pako 2.1.0 single-stream inflater with explicit output bounds and consumed-byte reporting. It rejects corrupt/truncated input, reports trailing bytes for the caller to reject, and retains the strict PNG/PDF parsers. The hosted fixed-fixture health check now reports `image_validation: true`; no user files, credentials or answer keys are included in that diagnostic.
+
+Browser input accepts static PNG, JPEG and WebP (up to 2 MiB with bounded source dimensions). PNG no longer bypasses conversion: palette/transparency and 16-bit grayscale inputs also pass through the browser raster decoder and canvas to an 8-bit PNG, stripped of original metadata and resized proportionally to at most 768 pixels per side. Unsupported/animated or malformed files are rejected before upload. The server independently validates the prepared result. Evidence and image-material pickers both include WebP.
+
+Validation: real browser conversion checks passed for RGB/RGBA PNG, palette/transparency PNG, grayscale 16-bit PNG, JPEG and WebP; bounded/truncated/trailing compressed input and malformed-image rejection passed. A static PDF also passed the hosted portable decoder test. The 22-check hosted administrative UI regression and strict training TypeScript checks passed. Remote fixed PNG validation changed from false to true after deployment. Actual evidence submission/review with the user’s file remains to be confirmed. Main and production are unchanged.

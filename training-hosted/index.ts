@@ -2,6 +2,8 @@ import postgres from 'npm:postgres@3.4.3';
 import {Buffer} from 'node:buffer';
 import {createHash} from 'node:crypto';
 import {createTrainingService,ApiError} from '../training-isolation/service.mjs';
+import {normalizePNG} from '../training-isolation/private-images.mjs';
+import {imageFixture} from '../training-isolation/image-fixtures.mjs';
 import {hostedAdministration} from './administration.mjs';
 import {verifyHostedUser,currentHostedActor} from './identity.mjs';
 (globalThis as any).Buffer=Buffer;
@@ -28,7 +30,7 @@ Deno.serve(async(req:Request)=>{
  const send=(status:number,value:unknown)=>new Response(JSON.stringify(value),{status,headers});
  try{
   const path=new URL(req.url).pathname.replace(/^\/training-preview/,'');
-  if(req.method==='GET'&&path==='/health'){const rows=await sql`select to_regclass('training_private.training_principals') is not null as initialized`;return send(200,{sandbox:true,react_training_api:1,storage:'hosted-preview',initialized:rows[0].initialized});}
+  if(req.method==='GET'&&path==='/health'){const rows=await sql`select to_regclass('training_private.training_principals') is not null as initialized`;return send(200,{sandbox:true,react_training_api:1,storage:'hosted-preview',initialized:rows[0].initialized,...(new URL(req.url).searchParams.get('check')==='image'?{image_validation:(()=>{try{normalizePNG(imageFixture({width:1,height:1}).toString('base64'),(_status,message)=>{throw Error(message);});return true;}catch{return false;}})()}: {})});}
   if(!((req.method==='GET'&&['/api/me','/api/workspace'].includes(path))||(req.method==='POST'&&operations[path])))fail(404,'Route unavailable');
   const token=req.headers.get('Authorization')?.replace(/^Bearer /,'')||'';
   const publicQuiz=path.startsWith('/api/quiz/');

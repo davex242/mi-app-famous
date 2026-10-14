@@ -10,7 +10,7 @@ export function hostedRequestError(status:number,reason:unknown){
   'Choose one evidence file':'Adjunta un solo archivo por evidencia.',
   'Static PDF without passwords, forms, actions or attachments required':'El PDF debe ser estático, sin contraseña, formularios, acciones ni adjuntos.',
   'PDF exceeds 2 MiB limit':'El PDF supera el límite de 2 MiB.',
-  'Valid RGB or RGBA PNG required':'La imagen debe ser un PNG válido en formato RGB o RGBA. Prueba a exportarla nuevamente.',
+  'Valid RGB or RGBA PNG required':'No se pudo validar la copia PNG preparada. Prueba con otra imagen PNG, JPEG o WebP.',
   'PNG exceeds 2 MiB limit':'La imagen supera el límite de 2 MiB.',
   'PNG dimensions exceed sandbox limit':'La imagen supera las dimensiones admitidas: hasta 2048 por lado y 4 millones de píxeles.',
   'Compatible MP4 H264 with optional AAC required':'El video debe ser MP4 con H.264 y audio AAC opcional.',
