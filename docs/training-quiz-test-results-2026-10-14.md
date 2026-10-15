@@ -16,3 +16,14 @@ Entorno: Preview, sin alterar datos de emisores ni producción.
 - READY no demuestra que la navegación y el envío real funcionen.
 - La publicación del banco y las invitaciones deben probarse con una inscripción de prueba aislada, nunca alterando la inscripción activa sin autorización.
 - El cierre del circuito requiere prueba autenticada: crear sesión/quiz de 10, publicar, emitir, abrir enlace, responder, calificar y confirmar persistencia por inscripción. Repetir con examen final de 25 y límites de intentos.
+
+## Ejecución automatizada adicional (autorización expresa del propietario)
+- PASS: migración `training_exam_question_counts_10_25_50` aplicada a la base Preview. Permite 10/25/50 preguntas y cambia el valor por defecto a 25.
+- PASS: backend `training-preview` v15 registra `question_count` real al publicar, evitando el valor heredado de 50.
+- ERROR DETECTADO Y CORREGIDO: la fórmula anterior de nota era `respuestas_correctas * 2`, válida solo para 50 preguntas. Backend v16 calcula `respuestas_correctas * 100 / total_preguntas`.
+- PASS: prueba SQL automática con escritura transaccional para bancos de 10, 25 y 50, creación de preguntas y claves, validación de porcentaje y rechazo del tamaño inválido 11. El bloque de pruebas se revierte mediante subtransacción PL/pgSQL; no conserva registros.
+- PASS: inspección de función publicada v16; el presupuesto de intentos de los cuestionarios de sesión se separa del examen final.
+- SIN EJECUTAR: prueba HTTP real autenticada de publicación, emisión, apertura de enlace, entrega de respuestas y verificación de calificación. No se dispone de una sesión autenticada del navegador ni de credenciales de prueba para invocar ese flujo; no se sustituyó por operaciones SQL que eludirían permisos.
+- SIN EJECUTAR: prueba de expiración de enlace, reintentos reales y errores parciales a través de la API.
+
+Estado: **pruebas de esquema y lógica aprobadas; E2E HTTP no verificado**. No confundir pruebas SQL con pruebas del circuito de usuario.
