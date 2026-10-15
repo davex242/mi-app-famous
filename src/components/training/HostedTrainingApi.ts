@@ -56,7 +56,15 @@ export class HostedTrainingApi extends LocalTrainingApi{
   this.clear();await this.connect();const generation=this.generation;
   const response=await fetch(this.config.url+'/auth/v1/token?grant_type=password',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
   if(generation!==this.generation)throw new LocalTrainingError(401);
-  if(!response.ok)throw new LocalTrainingError(401);
+  if(!response.ok){
+   let code='';try{const payload=await response.json();code=typeof payload?.error_code==='string'?payload.error_code:'';}catch{/* Do not expose provider payloads. */}
+   const error=new LocalTrainingError(response.status===429?429:401);
+   if(code==='email_not_confirmed')error.message='La cuenta de capacitación no está confirmada.';
+   else if(response.status===429)error.message='Demasiados intentos de acceso a capacitación. Espera antes de volver a intentarlo.';
+   else if(response.status>=500)error.message='El servicio de autenticación de capacitación no está disponible temporalmente.';
+   else error.message='Capacitación rechazó las credenciales. Comprueba que esta cuenta esté vinculada y autorizada.';
+   throw error;
+  }
   const data=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);if(typeof data.access_token!=='string'||data.access_token.length>8192)throw new LocalTrainingError(401);
   this.token=data.access_token;this.refreshToken=data.refresh_token;this.expiresAt=Date.now()+(Number(data.expires_in)||3600)*1000;this.persist();try{return await this.load();}catch(error){await this.logout();throw error;}
  }
