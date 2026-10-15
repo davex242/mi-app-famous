@@ -30,7 +30,7 @@ jobs:
           test -s supabase/functions/training-preview/index.js
       - name: Configure generated Edge entrypoint
         run: |
-          printf '[functions.training-preview]\\nentrypoint = "./functions/training-preview/index.js"\\nverify_jwt = false\\n' > supabase/config.toml
+          printf 'project_id = "mi-app-famous-preview"\\n[functions.training-preview]\\nentrypoint = "./functions/training-preview/index.js"\\nverify_jwt = false\\n' > supabase/config.toml
       - name: Deploy only training-preview to Supabase Preview
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
