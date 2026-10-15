@@ -28,6 +28,9 @@ jobs:
           npm install --prefix /tmp/training-edge-tools --no-audit --no-fund esbuild@0.25.12
           APP_NODE_MODULES=/tmp/training-edge-tools/node_modules TRAINING_EDGE_OUTPUT="$GITHUB_WORKSPACE/supabase/functions/training-preview" node training-hosted/build-edge.mjs
           test -s supabase/functions/training-preview/index.js
+      - name: Configure generated Edge entrypoint
+        run: |
+          printf '[functions.training-preview]\\nentrypoint = "./functions/training-preview/index.js"\\nverify_jwt = false\\n' > supabase/config.toml
       - name: Deploy only training-preview to Supabase Preview
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
