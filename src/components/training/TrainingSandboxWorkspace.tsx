@@ -4,6 +4,7 @@ import './TrainingDemoWorkspace.css';
 import HostedTrainingAdministration from './HostedTrainingAdministration';
 import {HostedTrainingApi,HostedTrainingConfig} from './HostedTrainingApi';
 import TrainingLocalAgenda from './TrainingLocalAgenda';
+import TrainingPhaseFourTracking from './TrainingPhaseFourTracking';
 import TrainingLocalEvidence from './TrainingLocalEvidence';
 import TrainingLocalLibrary from './TrainingLocalLibrary';
 import TrainingLocalQuizInvitations from './TrainingLocalQuizInvitations';
@@ -12,7 +13,7 @@ import TrainingLocalUpdates from './TrainingLocalUpdates';
 import TrainingLocalProgramEditor from './TrainingLocalProgramEditor';
 import {supabase} from '@/lib/supabase';
 import type {Host} from '@/types';
-const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Historial'];
+const sections = ['Resumen','Programas','Agenda','Evidencias','Biblioteca','Actualizaciones','Quiz final','Cierre','Seguimiento','Historial'];
 const value = (row: PublicRow, key: string) => typeof row[key] === 'string' || typeof row[key] === 'number' ? String(row[key]) : '—';
 const statusLabels:Record<string,string>={active:'Activo',paused:'Pausado',completed:'Completado',cancelled:'Cancelado',draft:'Borrador',published:'Publicado',archived:'Archivado'};
 const columns: Record<string, {table: string; fields: [string,string][]}> = {
@@ -99,7 +100,8 @@ export default function TrainingSandboxWorkspace({hosted,defaultEmail='',sharedA
         {hosted&&data.actor.role==='superadmin'&&<section className="td-panel"><h3>Reasignar entrenador sin perder el avance</h3><p>La reasignación conserva el identificador de inscripción y todas las evidencias, asistencias y evaluaciones. No cambia el reclutador oficial de DatabasePad.</p><label>Inscripción<select value={reassignEnrollmentId} onChange={e=>setReassignEnrollmentId(e.target.value)}><option value="">Selecciona inscripción</option>{workspace.enrollments.map(e=><option key={e.id} value={e.id}>{hostLabel(e.host_id)} · {workspace.program_versions.find(p=>p.id===e.program_version_id)?.title||e.program_version_id}</option>)}</select></label><label>Nuevo entrenador<select value={reassignTrainerId} onChange={e=>setReassignTrainerId(e.target.value)}><option value="">Selecciona entrenador</option>{trainingUsers.filter(u=>u.is_active&&u.app_user_id).map(u=><option key={String(u.app_user_id)} value={String(u.app_user_id)}>{String(u.display_name||u.email)}</option>)}</select></label><button type="button" disabled={busy} onClick={()=>{const enrollment=reassignEnrollmentId;const trainer=reassignTrainerId;if(!enrollment||!trainer){setNotice('Selecciona inscripción y entrenador');return;}void run(async()=>{await (api.current as HostedTrainingApi).reassignEnrollment(enrollment,trainer);await refresh();setNotice('Responsable actualizado. El historial de la inscripción se conserva.');setReassignEnrollmentId('');setReassignTrainerId('');});}}>Reasignar entrenador</button></section>}
         <h3>Inscripciones del entorno local</h3>{workspace.enrollments.length===0?<p>Aún no hay inscripciones.</p>:<ul>{workspace.enrollments.map(row=><li key={row.id}>{hostLabel(row.host_id)} · {statusLabels[value(row,'status')]??value(row,'status')} · {value(row,'timezone')}</li>)}</ul>}
       </>}
-      {spec && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && <div className="td-table-scroll" role="region" aria-label={`${section}: tabla de registros`} tabIndex={0}><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{key==='status'?(statusLabels[value(row,key)]??value(row,key)):value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {spec && section!=='Agenda' && section!=='Evidencias' && section!=='Biblioteca' && section!=='Quiz final' && section!=='Cierre' && section!=='Actualizaciones' && section!=='Seguimiento' && <div className="td-table-scroll" role="region" aria-label={`${section}: tabla de registros`} tabIndex={0}><table><thead><tr>{spec.fields.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{spec.fields.map(([key])=><td key={key}>{key==='status'?(statusLabels[value(row,key)]??value(row,key)):value(row,key)}</td>)}</tr>)}</tbody></table>{rows.length===0&&<p>Sin registros de prueba en esta sección.</p>}</div>}
+      {section==='Seguimiento' && workspace && <TrainingPhaseFourTracking workspace={workspace}/>}
       {section==='Agenda' && workspace && <TrainingLocalAgenda api={api.current} workspace={workspace} readonly={readonly} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Evidencias' && workspace && <TrainingLocalEvidence api={api.current} workspace={workspace} role={data.actor.role} busy={busy} run={run} refresh={refresh} notify={setNotice}/> }
       {section==='Biblioteca' && workspace && <TrainingLocalLibrary api={api.current} workspace={workspace} role={data.actor.role} refresh={refresh} notify={setNotice} busy={busy} run={run}/> }
