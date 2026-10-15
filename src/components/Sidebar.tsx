@@ -17,8 +17,7 @@ import {
   BarChart3,
   UserCircle,
   Lock,
-  UserX,
-  GraduationCap
+  UserX
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -34,7 +33,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onToggle }: 
   const [showBlockedMessage, setShowBlockedMessage] = useState<string | null>(null);
 
   // Define which menu items are available to non-admin users (edit and readonly)
-  const limitedUserMenuIds = ['dashboard', 'recruiter-portal', 'host-training', 'add', 'reports'];
+  const limitedUserMenuIds = ['dashboard', 'recruiter-portal', 'add', 'reports'];
   
   // Define which menu items are blocked for readonly users (they can see but not access)
   const readonlyBlockedIds = ['add'];
@@ -43,7 +42,6 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onToggle }: 
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'recruiter-portal', label: isSuperAdmin ? 'Portal Reclutadores' : 'My Portal', icon: UserCircle },
-    { id: 'host-training', label: 'Host Training & Development', icon: GraduationCap },
 
     { id: 'add', label: 'Agregar Registro', icon: PlusCircle },
 
