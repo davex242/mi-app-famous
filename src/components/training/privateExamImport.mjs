@@ -13,7 +13,7 @@ export function parsePrivateExamFile(raw){
   if(data.status!=='draft'||data.review_status!=='accepted_for_initial_testing'||data.expires_at!==null)failure('Se requiere un borrador aceptado para pruebas iniciales, sin fecha de vencimiento propia.');
   if(data.pass_percent!==75||data.max_attempts!==3||data.extra_attempts_require_preapproval!==true||data.invitation_hours!==24)failure('El banco debe conservar 75%, 3 intentos, extras preaprobados y 24 horas por invitación.');
   const key=text(data.key,80);
-  if(!Array.isArray(data.questions)||data.questions.length!==50)failure('El banco debe contener exactamente 50 preguntas.');
+  if(!Array.isArray(data.questions)||data.questions.length!==25)failure('El banco debe contener exactamente 25 preguntas.');
   const ids=new Set(),prompts=new Set(),units=new Set(),knownUnits=new Set(trainingContentProposal.units.map(unit=>unit.key));
   const questions=[],rationales=[];
   for(const row of data.questions){
