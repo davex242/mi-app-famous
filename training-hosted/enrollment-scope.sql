@@ -19,7 +19,7 @@ create policy exam_assignments_read on public.training_exam_assignments for sele
   using (training_private.can_read_enrollment(enrollment_id));
 drop index if exists public.training_one_active_enrollment_idx;
 create unique index training_one_active_enrollment_idx on public.training_enrollments(host_id,program_version_id)
-  where status in ('active','paused') and not is_free_training;
+  where status in ('active','paused','completed') and not is_free_training;
 alter table public.training_exam_versions drop constraint if exists training_exam_versions_question_count_check;
 alter table public.training_exam_versions add constraint training_exam_versions_question_count_check check(question_count in (10,25,50));
 alter table public.training_exam_versions alter column question_count set default 25;

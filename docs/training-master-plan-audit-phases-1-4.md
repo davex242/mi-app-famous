@@ -1,4 +1,7 @@
 # Mi App Famous — Registro de fases 1–4 (Preview)
+
+> Registro histórico. La auditoría posterior con comprobaciones reales está en [auditoría integral](training-acceptance/README.md).
+
 Actualizado: 2026-10-14. Este registro separa implementación, verificación y deuda; no equivale a aprobación de producción.
 
 ## Fase 1 — Identidades y base

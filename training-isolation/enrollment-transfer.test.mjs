@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createIsolatedDatabase} from './database.mjs';
 import {createTrainingService,provisionSyntheticUser} from './service.mjs';
 import {seedDemoProgram} from './demo-fixtures.mjs';
+import {imageFixture} from './image-fixtures.mjs';
 import {examTemplate} from './exam-template.mjs';
 import {createSandboxHttpServer} from './server.mjs';
 
@@ -10,7 +11,16 @@ test('FICTITIOUS: 50 hosts, five trainers, three 14-day courses, enrollment isol
  const db=await createIsolatedDatabase(),s=createTrainingService(db),server=createSandboxHttpServer(s);
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const url=`http://127.0.0.1:${server.address().port}`,password='FICTITIOUS-only-training-test-password';
- const call=async(path,body,token)=>{const r=await fetch(url+path,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};};
+ const call=async(path,body,token)=>{
+  const send=()=>fetch(url+path,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify(body)});
+  let r=await send();
+  if(r.status===429){
+   assert.equal((await r.json()).error,'Try again later');
+   t.diagnostic('Honoring the sandbox 200-request/minute limit before retrying the unprocessed operation.');
+   await new Promise(resolve=>setTimeout(resolve,30000));await new Promise(resolve=>setTimeout(resolve,30000));r=await send();
+  }
+  return {status:r.status,body:await r.json()};
+ };
  const ok=async(path,body,token)=>{const r=await call(path,body,token);assert.equal(r.status,200,JSON.stringify(r.body));return r.body;};
  try{
   const admin=await provisionSyntheticUser(db,'FICTITIOUS-admin',password,'superadmin');
@@ -33,12 +43,18 @@ test('FICTITIOUS: 50 hosts, five trainers, three 14-day courses, enrollment isol
   await t.test('duplicate enrollment rejects; trainer cannot transfer; admin transfer preserves original host recruiter',async()=>{
    assert.equal((await call('/api/enrollments',{host_id:e.host_id,program_version_id:programs[0].program_version_id,timezone:'UTC'},original.token)).status,409);
    assert.equal((await call('/api/enrollments/reassign',{enrollment_id:e.id,trainer_id:next.app_user_id},original.token)).status,403);
+   const before=await ok('/api/exams/publish',{exam_key:'FICTITIOUS-before-transfer',pass_percent:75,questions:examTemplate()},at);
+   const priorInvitation=await ok('/api/exams/issue',{enrollment_id:e.id,exam_version_id:before.id,max_attempts:3},original.token);
    await ok('/api/enrollments/reassign',{enrollment_id:e.id,trainer_id:next.app_user_id},at);
    assert.equal((await db.query('select recruiter_id from training_private.training_host_assignments where host_id=$1',[e.host_id])).rows[0].recruiter_id,original.app_user_id);
    assert.equal((await s.workspace(original.token)).enrollments.some(x=>x.id===e.id),false);
    assert.equal((await s.workspace(original.token)).enrollments.some(x=>x.id===second.id),true);
    assert.equal((await s.workspace(next.token)).enrollments.some(x=>x.id===e.id),true);
    assert.equal((await s.workspace(next.token)).enrollments.some(x=>x.id===second.id),false);
+   assert.equal((await s.workspace(original.token)).exam_assignments.some(x=>x.id===priorInvitation.assignment.id),false);
+   assert.equal((await s.workspace(next.token)).exam_assignments.some(x=>x.id===priorInvitation.assignment.id),true);
+   assert.equal((await call('/api/exams/revoke',{assignment_id:priorInvitation.assignment.id},original.token)).status,404);
+   await ok('/api/exams/revoke',{assignment_id:priorInvitation.assignment.id},next.token);
   });
   for(const n of [10,25,50])await t.test(`${n} questions: full HTTP publication, scoring below/above 75%, immutable retry, revocation scope`,async()=>{
    const bank=examTemplate().slice(0,n);
@@ -89,6 +105,23 @@ test('FICTITIOUS: 50 hosts, five trainers, three 14-day courses, enrollment isol
    await ok('/api/quiz/submit',{attempt_id:start.attempt_id,answers:start.questions.map((q,i)=>({question_id:q.id,selected_option:bank[i].correct_option}))},issued.invitation_token);
    const after=(await s.workspace(at)).exam_attempt_budgets.find(b=>b.enrollment_id===enrollments[0].id).used;
    assert.equal(after,before);
+  });
+  await t.test('bulk evidence and invitations preserve 28 successes when two entries fail scope',async()=>{
+   const version=(await s.workspace(at)).exams.find(x=>x.question_count===25);
+   const invitations=[];
+   for(let i=0;i<30;i++)invitations.push(await call('/api/exams/issue',{enrollment_id:enrollments[i].id,exam_version_id:version.id,max_attempts:3},i<2?trainers[4].token:at));
+   assert.equal(invitations.filter(x=>x.status===200).length,28);assert.equal(invitations.filter(x=>x.status===404).length,2);
+   for(let i=0;i<2;i++)await ok('/api/exams/issue',{enrollment_id:enrollments[i].id,exam_version_id:version.id,max_attempts:3},at);
+   assert.equal((await call('/api/exams/issue',{enrollment_id:enrollments[2].id,exam_version_id:version.id,max_attempts:3},at)).status,409);
+   const image=imageFixture({width:2,height:2}).toString('base64'),proofs=[];
+   for(let i=0;i<30;i++){
+    const session=await ok('/api/sessions',{enrollment_id:enrollments[i].id,item_id:programs[i%3].item_ids[1],scheduled_at:'2026-10-16T12:00:00Z',duration_minutes:30},at);
+    const body={session_id:session.id,description:'FICTITIOUS bulk proof',image_base64:image,consent_confirmed:true};
+    const result=await call('/api/evidence',body,i<2?trainers[4].token:at);proofs.push(result);
+    if(i<2)await ok('/api/evidence',body,at);
+   }
+   assert.equal(proofs.filter(x=>x.status===200).length,28);assert.equal(proofs.filter(x=>x.status===404).length,2);
+   assert.equal((await db.query("select count(*)::int n from public.training_evidence where description='FICTITIOUS bulk proof'")).rows[0].n,30);
   });
  }finally{await new Promise(r=>server.close(r));await db.close();}
 });

@@ -1,7 +1,12 @@
 import React,{useMemo,useState} from 'react';
 import {LocalWorkspace,PublicRow} from './localTrainingApi';
 const val=(r:PublicRow|undefined,k:string)=>r&&r[k]!==undefined&&r[k]!==null?String(r[k]):'';
-const csvCell=(x:unknown)=>'"'+String(x??'').replace(/^[\x00-\x20]*[=+@\-]/,"'$&").replace(/"/g,'""')+'"';
+const csvCell=(value:unknown)=>{
+ const text=String(value??'');let first=0;
+ while(first<text.length&&text.charCodeAt(first)<=32)first++;
+ const safe=first<text.length&&'=+@-'.includes(text[first])?"'"+text:text;
+ return '"'+safe.replace(/"/g,'""')+'"';
+};
 export default function TrainingPhaseFiveReports({workspace,role,officialRecruiters}:{workspace:LocalWorkspace;role:string;officialRecruiters?:Record<string,string>}){
  const [program,setProgram]=useState(''),[trainer,setTrainer]=useState(''),[recruiter,setRecruiter]=useState(''),[search,setSearch]=useState(''),[selected,setSelected]=useState('');
  const isAdmin=role==='superadmin'||role==='subadmin';

@@ -1,5 +1,8 @@
 # Mi App Famous — Fase 7: pruebas finales y publicación
 
+> Registro histórico. La auditoría posterior con comprobaciones reales está en [auditoría integral](training-acceptance/README.md).
+
+
 Estado: **NO APROBADO PARA PUBLICACIÓN**. Fecha de registro: 2026-10-14.
 Entorno autorizado: rama Preview `base44/setup-b8f0f68b`. No fusionar a producción hasta cumplir todos los criterios.
 

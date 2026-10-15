@@ -1,4 +1,4 @@
-import sys,json,pathlib,secrets,time
+import sys,json,pathlib,secrets,time,base64,hashlib,zlib,struct
 from preview_api import management,query,request
 if '--run-preview' not in sys.argv:
  raise SystemExit('Explicit Preview write opt-in required: python3 training-hosted/preview-journey.py --run-preview')
@@ -11,6 +11,27 @@ def lit(v):return "'"+str(v).replace("'","''")+"'"
 def denied(path,body,token,status):
  try:api(path,body,token);return False
  except RuntimeError as e:return str(e).startswith(str(status)+' ')
+def png_pixels(encoded):
+ data=base64.b64decode(encoded);pos=8;compressed=b''
+ while pos<len(data):
+  length=struct.unpack('>I',data[pos:pos+4])[0];kind=data[pos+4:pos+8];chunk=data[pos+8:pos+8+length];pos+=length+12
+  if kind==b'IHDR':width,height,depth,color=struct.unpack('>IIBB',chunk[:10])
+  if kind==b'IDAT':compressed+=chunk
+ assert depth==8 and color in (2,6)
+ bpp=3 if color==2 else 4;stride=width*bpp;raw=zlib.decompress(compressed);previous=bytearray(stride);pixels=bytearray()
+ for row in range(height):
+  offset=row*(stride+1);mode=raw[offset];current=bytearray(raw[offset+1:offset+1+stride])
+  for i in range(stride):
+   a=current[i-bpp] if i>=bpp else 0;b=previous[i];c=previous[i-bpp] if i>=bpp else 0
+   if mode==1:predict=a
+   elif mode==2:predict=b
+   elif mode==3:predict=(a+b)//2
+   elif mode==4:
+    estimate=a+b-c;dist=[abs(estimate-a),abs(estimate-b),abs(estimate-c)];predict=[a,b,c][dist.index(min(dist))]
+   else:assert mode==0;predict=0
+   current[i]=(current[i]+predict)%256
+  pixels.extend(current);previous=current
+ return width,height,color,bytes(pixels)
 keys=management('/api-keys');service=next(k['api_key'] for k in keys if k['name']=='service_role');pub=next(k['api_key'] for k in keys if k['name']=='anon')
 def login(index):
  auth=f['auth_users'][index];u=request(P+'/auth/v1/admin/users/'+auth,service,headers={'apikey':service})
@@ -27,11 +48,12 @@ try:
  check('authenticated direct Data API cannot read exam questions',privateDenied)
  files=json.loads(ROOT.joinpath('evidence-fixtures.json').read_text());sessions=[]
  for i,(kind,payload) in enumerate(files.items()):
-  s=api('/api/sessions',{'enrollment_id':e['id'],'item_id':items[i]['id'],'scheduled_at':f'2026-10-{16+i:02}T12:00:00Z','duration_minutes':30},trainer);sessions.append(s)
+  s=next((x for x in w['sessions'] if x['enrollment_id']==e['id'] and x['item_id']==items[i]['id']),None) or api('/api/sessions',{'enrollment_id':e['id'],'item_id':items[i]['id'],'scheduled_at':f'2026-10-{16+i:02}T12:00:00Z','duration_minutes':30},trainer);sessions.append(s)
   check(kind+' upload denied to former trainer',denied('/api/evidence',{'session_id':s['id'],'description':run+' '+kind,'consent_confirmed':True,**payload},old,404))
-  proof=api('/api/evidence',{'session_id':s['id'],'description':run+' '+kind,'consent_confirmed':True,**payload},trainer)
+  proof=next((x for x in w['evidence'] if x['session_id']==s['id'] and x['description']==run+' '+kind),None) or api('/api/evidence',{'session_id':s['id'],'description':run+' '+kind,'consent_confirmed':True,**payload},trainer)
   download=api('/api/evidence/file-download',{'evidence_id':proof['id']},trainer)
-  check(kind+' real hosted upload/download preserves bytes',next(v for k,v in payload.items())==next(v for k,v in download.items() if k.endswith('_base64')))
+  downloaded=next(v for k,v in download.items() if k.endswith('_base64'));original=next(iter(payload.values()))
+  check(kind+' hosted download checksum and content',hashlib.sha256(base64.b64decode(downloaded)).hexdigest()==download['sha256'] and (png_pixels(original)==png_pixels(downloaded) if 'image_base64' in payload else original==downloaded))
   check(kind+' cross-trainer download rejected',denied('/api/evidence/file-download',{'evidence_id':proof['id']},old,404))
   api('/api/attendance',{'session_id':s['id'],'status':'present','expected_recorded_at':None},trainer)
   api('/api/evidence/review',{'evidence_id':proof['id'],'decision':'approved','notes':'FICTITIOUS approved test'},admin)

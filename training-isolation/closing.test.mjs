@@ -104,6 +104,7 @@ test('administrative closing: complete requirements, exact quiz version and immu
   });
   await t.test('future program versions and new enrollments do not rewrite the old closing snapshot',async()=>{
    const before=JSON.stringify((await service.workspace(tokens.admin)).closing_records);
+   await assert.rejects(()=>service.enroll(tokens.admin,{host_id:scenario.e.host_id,program_version_id:scenario.program.id,timezone:'America/Costa_Rica'}),error=>error.status===409);
    const newer=await service.saveProgram(tokens.admin,{source_id:scenario.program.id,title:'DEMO versión futura',duration_days:3,changelog:'DEMO requisito nuevo',items:[...scenario.items.map(i=>({day:i.day,topic_id:i.topic_id,notes:i.notes,material_ids:[]})),{day:3,topic_id:scenario.items[0].topic_id,notes:'DEMO nueva práctica',material_ids:[]}]});await service.publishProgram(tokens.admin,{id:newer.id});
    const e=await service.enroll(tokens.admin,{host_id:scenario.e.host_id,program_version_id:newer.id,timezone:'America/Costa_Rica'});
    assert.equal(JSON.stringify((await service.workspace(tokens.admin)).closing_records),before);
