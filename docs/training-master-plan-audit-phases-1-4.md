@@ -22,3 +22,10 @@ Alcance oficial: carga de imágenes/documentos; conversión segura; evidencia po
 - Solo rama `base44/setup-b8f0f68b`; no fusionar producción.
 - No ejecutar migraciones ni modificar el padrón oficial sin revisión.
 - No declarar cerrada una fase mientras queden funcionalidades obligatorias sin implementar. La auditoría integral se hará al finalizar las fases si el usuario así lo decide.
+
+## Actualización de seguridad y pruebas (2026-10-14, posterior a la versión 16)
+- Aplicada en Supabase Preview migración `training_enrollment_scoped_read_authorization`: `can_read_enrollment` consulta directamente `training_enrollments.recruiter_id` y la política `enrollments_read` usa la inscripción, no la asignación global del host.
+- **NO CERRADO:** la Edge Function `training-preview` conserva consultas `workspace` basadas en `training_host_assignments`. Se intentó corregirlas pero la operación de despliegue fue bloqueada por controles de seguridad. No afirmar que la transferencia funciona de punta a punta.
+- **RIESGO:** tras modificar las políticas de lectura sin actualizar simultáneamente el servicio, pueden existir diferencias entre el listado de emisores y las inscripciones visibles. Requiere comprobación antes de producción.
+- Se mantienen los exámenes nuevos de 10/25 preguntas y compatibilidad con 50 en backend v16. Pruebas SQL transaccionales ejecutadas y revertidas; sin E2E autenticado.
+- Nuevas operaciones de consulta Supabase fueron bloqueadas por controles de seguridad; no se ha validado la migración con dos identidades reales de prueba.
