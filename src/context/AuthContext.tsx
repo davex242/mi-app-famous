@@ -57,8 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {await training.login(email,password);}
         catch (cause) {
           const detail=cause instanceof Error?cause.message:'';
-          const known=detail.startsWith('La cuenta de capacitación no está confirmada.')||detail.startsWith('Demasiados intentos de acceso a capacitación.')||detail.startsWith('El servicio de autenticación de capacitación no está disponible temporalmente.')||detail.startsWith('Capacitación rechazó las credenciales.');
-          return {success:false,error:known?detail:'La app validó tus datos, pero no pudo completar la sesión de capacitación. Revisa la disponibilidad del servicio o la autorización de tu cuenta.'};
+          // Only surface errors produced by our training client; do not expose provider payloads.
+          const safe=detail.startsWith('La cuenta de capacitación')||detail.startsWith('Demasiados intentos')||detail.startsWith('El servicio de autenticación')||detail.startsWith('Capacitación rechazó')||detail.startsWith('El servicio de capacitación')||detail.startsWith('La sesión de prueba')||detail.startsWith('Tu cuenta de prueba')||detail.startsWith('No se pudo completar la solicitud');
+          return {success:false,error:safe?detail:'No se pudo iniciar capacitación (conexión o sesión no disponible). Vuelve a intentarlo; si persiste, solicita revisar el servicio de Preview.'};
         }
       }
       const profile={...data,password_hash:''};
