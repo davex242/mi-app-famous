@@ -474,7 +474,7 @@ export default function DataTable({ data, onView, onEdit, onDelete, loading, onR
                       <div className="flex items-center gap-2">
                         <span className="max-w-[150px] truncate" title={host.host_name}>{host.host_name}</span>
                         {host.real && host.estado === 'Verified' && (
-                          <CheckCircle className="w-4 h-4 text-green-500" title="Verified Real Account" />
+                          <CheckCircle className="w-4 h-4 text-green-500" aria-label="Verified Real Account" />
                         )}
                         {isOverdue && (
                           <span className="inline-flex" title="Pending for more than 3 days">

@@ -100,7 +100,7 @@ test('administrative closing: complete requirements, exact quiz version and immu
   await t.test('assigned staff can read the immutable record; unrelated staff cannot',async()=>{
    assert.equal((await service.workspace(tokens.recruiter)).closing_records[0].id,record.id);assert.equal((await service.workspace(tokens.other)).closing_records.length,0);
    await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.read.app_user_id,scenario.e.host_id]);
-   assert.equal((await service.workspace(tokens.recruiter)).closing_records.length,0);assert.equal((await service.workspace(tokens.read)).closing_records[0].id,record.id);
+   assert.equal((await service.workspace(tokens.recruiter)).closing_records[0].id,record.id);assert.equal((await service.workspace(tokens.read)).closing_records.length,0);
   });
   await t.test('future program versions and new enrollments do not rewrite the old closing snapshot',async()=>{
    const before=JSON.stringify((await service.workspace(tokens.admin)).closing_records);

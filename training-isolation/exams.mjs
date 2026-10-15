@@ -11,7 +11,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
   async function publicRun(token, operation) {
     if(typeof token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(token)) fail(404,'Invitation unavailable');
     return db.transaction(async tx=>{
-      const a=(await tx.query(`select a.*,v.pass_percent from public.training_exam_assignments a
+      const a=(await tx.query(`select a.*,v.pass_percent,v.question_count,v.exam_key from public.training_exam_assignments a
         join training_private.training_exam_tokens t on t.assignment_id=a.id
         join public.training_exam_versions v on v.id=a.exam_version_id
         where t.token_hash=$1 and t.revoked_at is null and a.expires_at>now()
@@ -28,17 +28,17 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
     examTemplate:(token,body)=>run(token,async(_,actor)=>{requireAdmin(actor);fields(body,[]);return {demo:true,questions:examTemplate()};}),
     examEditData:(token,body)=>run(token,async(tx,actor)=>{
       requireAdmin(actor);fields(body,['id']);
-      const exam=(await tx.query("select id,exam_key,version,pass_percent from public.training_exam_versions where id=$1 and status='published'",[uuid(body.id)])).rows[0];
+      const exam=(await tx.query("select id,exam_key,version,pass_percent,question_count from public.training_exam_versions where id=$1 and status='published'",[uuid(body.id)])).rows[0];
       if(!exam)fail(404,'Record unavailable');
       const rows=(await tx.query('select q.prompt,q.options,k.correct_option from public.training_exam_questions q join training_private.training_exam_keys k on k.question_id=q.id where q.exam_version_id=$1 order by q.position',[exam.id])).rows;
-      if(rows.length!==50)fail(409,'Exam content is inconsistent');
+      if(rows.length!==exam.question_count)fail(409,'Exam content is inconsistent');
       return {...exam,pass_percent:Number(exam.pass_percent),questions:rows};
     }),
     publishExam:(token,body)=>run(token,async(tx,actor)=>{
       requireAdmin(actor);fields(body,['exam_key','pass_percent','questions','source_id']);
       const key=text(body.exam_key,80);
       if(!Number.isFinite(body.pass_percent)||body.pass_percent<=0||body.pass_percent>100 || Number(body.pass_percent.toFixed(2))!==body.pass_percent)fail(400,'Explicit approval threshold required');
-      if(!Array.isArray(body.questions)||body.questions.length!==50)fail(400,'Exactly 50 questions required');
+      if(!Array.isArray(body.questions)||![10,25,50].includes(body.questions.length))fail(400,'Exactly 10, 25 or 50 questions required');
       const prepared=body.questions.map(q=>{
         fields(q,['prompt','options','correct_option']);
         if(!Array.isArray(q.options)||q.options.length<2||q.options.length>6)fail(400,'Invalid options');
@@ -46,18 +46,18 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
         if(new Set(options).size!==options.length || !Number.isInteger(q.correct_option)||q.correct_option<0||q.correct_option>=options.length)fail(400,'Invalid answer key');
         return {prompt:text(q.prompt,1000),options,correct_option:q.correct_option};
       });
-      if(new Set(prepared.map(q=>q.prompt)).size!==50)fail(400,'Questions must be distinct');
+      if(new Set(prepared.map(q=>q.prompt)).size!==prepared.length)fail(400,'Questions must be distinct');
       const latest=(await tx.query('select * from public.training_exam_versions where exam_key=$1 order by version desc limit 1 for update',[key])).rows[0];
       if(latest ? body.source_id!==latest.id : body.source_id!==undefined)fail(409,'Exam version changed; refresh first');
-      const v=(await tx.query(`insert into public.training_exam_versions(exam_key,version,pass_percent,created_by)
-        values($1,$2,$3,$4) returning *`,[key,(latest?.version||0)+1,body.pass_percent,actor.app_user_id])).rows[0];
+      const v=(await tx.query(`insert into public.training_exam_versions(exam_key,version,pass_percent,created_by,question_count)
+        values($1,$2,$3,$4,$5) returning *`,[key,(latest?.version||0)+1,body.pass_percent,actor.app_user_id,prepared.length])).rows[0];
       for(let i=0;i<prepared.length;i++){
         const q=prepared[i];
         const row=(await tx.query('insert into public.training_exam_questions(exam_version_id,position,prompt,options) values($1,$2,$3,$4) returning id',[v.id,i+1,q.prompt,JSON.stringify(q.options)])).rows[0];
         await tx.query('insert into training_private.training_exam_keys(question_id,correct_option) values($1,$2)',[row.id,q.correct_option]);
       }
       await tx.query("update public.training_exam_versions set status='published' where id=$1",[v.id]);
-      await audit(tx,actor,'exam_published','exam_version',v.id,null,{question_count:50,pass_percent:body.pass_percent});
+      await audit(tx,actor,'exam_published','exam_version',v.id,null,{question_count:prepared.length,pass_percent:body.pass_percent});
       return {...v,status:'published'};
     }),
     issueExam:(token,body)=>run(token,async(tx,actor)=>{
@@ -69,11 +69,14 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       const expiresAt=new Date(Date.now()+24*60*60*1000).toISOString();
       const v=(await tx.query("select * from public.training_exam_versions where id=$1 and status='published' for share",[uuid(body.exam_version_id)])).rows[0];
       if(!v)fail(409,'Published exam required');
-      const budget=await examAttemptBudget(tx,e.id);if(body.max_attempts>budget.total||budget.remaining===0)fail(409,'Prior approval for additional attempts required');
+      const sessionId=v.exam_key.startsWith('session-')?uuid(v.exam_key.slice(8)):null;
+      if(sessionId && !(await tx.query("select id from public.training_sessions where id=$1 and enrollment_id=$2 and status='completed'",[sessionId,e.id])).rows.length)fail(409,'Completed session in this enrollment required');
+      if(sessionId && v.question_count!==10)fail(409,'Session quiz requires 10 questions');
+      const budget=await examAttemptBudget(tx,e.id,sessionId);if(body.max_attempts>budget.total||budget.remaining===0)fail(409,'Prior approval for additional attempts required');
       const qs=await questions(tx,v.id),keys=(await tx.query(`select k.* from training_private.training_exam_keys k join public.training_exam_questions q on q.id=k.question_id where q.exam_version_id=$1`,[v.id])).rows;
-      if(qs.length!==50||qs.some(q=>{const k=keys.find(k=>k.question_id===q.id);return !k||k.correct_option>=q.options.length;}))fail(409,'Exam content is inconsistent');
+      if(qs.length!==v.question_count||qs.some(q=>{const k=keys.find(k=>k.question_id===q.id);return !k||k.correct_option>=q.options.length;}))fail(409,'Exam content is inconsistent');
       if((await tx.query(`select a.id from public.training_exam_assignments a join training_private.training_exam_tokens t on t.assignment_id=a.id
-        where a.enrollment_id=$1 and a.status='issued' and t.revoked_at is null and a.expires_at>now()`,[e.id])).rows.length)fail(409,'An invitation is already active');
+        where a.enrollment_id=$1 and a.exam_version_id in (select id from public.training_exam_versions where (($2::text is null and exam_key not like 'session-%') or exam_key='session-'||$2::text)) and a.status='issued' and t.revoked_at is null and a.expires_at>now()`,[e.id,sessionId])).rows.length)fail(409,'An invitation is already active');
       const a=(await tx.query(`insert into public.training_exam_assignments(exam_version_id,host_id,enrollment_id,status,expires_at,issued_by,max_attempts)
         values($1,$2,$3,'issued',$4,$5,$6) returning *`,[v.id,e.host_id,e.id,expiresAt,actor.app_user_id,body.max_attempts])).rows[0];
       const invitation=randomBytes(32).toString('base64url');
@@ -93,8 +96,8 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
     examStatus:(token,body)=>publicRun(token,async(tx,a)=>{
       fields(body,[]);
       const attempts=(await tx.query('select * from public.training_exam_attempts where assignment_id=$1 order by attempt_number',[a.id])).rows;
-      const budget=await examAttemptBudget(tx,a.enrollment_id);
-      return {attempts_remaining:budget.remaining,question_count:50,pass_percent:Number(a.pass_percent),max_attempts:a.max_attempts,expires_at:a.expires_at,
+      const budget=await examAttemptBudget(tx,a.enrollment_id,a.exam_key.startsWith('session-')?a.exam_key.slice(8):null);
+      return {attempts_remaining:budget.remaining,question_count:a.question_count,pass_percent:Number(a.pass_percent),max_attempts:a.max_attempts,expires_at:a.expires_at,
         attempts:attempts.filter(r=>r.submitted_at).map(result),can_start:a.status==='issued'&&(attempts.some(row=>!row.submitted_at)||(attempts.length<a.max_attempts&&budget.remaining>0))};
     }),
     startExam:(token,body)=>publicRun(token,async(tx,a)=>{
@@ -103,7 +106,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       const attempts=(await tx.query('select * from public.training_exam_attempts where assignment_id=$1 order by attempt_number',[a.id])).rows;
       let current=attempts.find(a=>!a.submitted_at);
       if(!current){
-        const budget=await examAttemptBudget(tx,a.enrollment_id);if(budget.remaining===0)fail(409,'Prior approval for additional attempts required');
+        const budget=await examAttemptBudget(tx,a.enrollment_id,a.exam_key.startsWith('session-')?a.exam_key.slice(8):null);if(budget.remaining===0)fail(409,'Prior approval for additional attempts required');
         if(attempts.length>=a.max_attempts)fail(409,'Attempt limit reached');
         current=(await tx.query('insert into public.training_exam_attempts(assignment_id,attempt_number) values($1,$2) returning *',[a.id,attempts.length+1])).rows[0];
         await audit(tx,{app_user_id:null},'exam_started','exam_attempt',current.id,a.enrollment_id,{assignment_id:a.id,identity:'invitation bearer'});
@@ -115,14 +118,14 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       const attempt=(await tx.query('select * from public.training_exam_attempts where id=$1 and assignment_id=$2 for update',[uuid(body.attempt_id),a.id])).rows[0];
       if(!attempt)fail(404,'Invitation unavailable');
       const qs=await questions(tx,a.exam_version_id);
-      if(!Array.isArray(body.answers)||body.answers.length!==50)fail(400,'Answer all 50 questions');
+      if(!Array.isArray(body.answers)||body.answers.length!==a.question_count)fail(400,'Answer all questions');
       const answers=body.answers.map(answer=>{
         fields(answer,['question_id','selected_option']);
         const q=qs.find(q=>q.id===uuid(answer.question_id));
         if(!q||!Number.isInteger(answer.selected_option)||answer.selected_option<0||answer.selected_option>=q.options.length)fail(400,'Invalid answer');
         return {question_id:q.id,selected_option:answer.selected_option};
       }).sort((a,b)=>a.question_id.localeCompare(b.question_id));
-      if(new Set(answers.map(a=>a.question_id)).size!==50)fail(400,'Duplicate answer');
+      if(new Set(answers.map(a=>a.question_id)).size!==a.question_count)fail(400,'Duplicate answer');
       if(attempt.submitted_at){
         const saved=(await tx.query('select question_id,selected_option from training_private.training_exam_answers where attempt_id=$1 order by question_id',[attempt.id])).rows;
         if(JSON.stringify(saved)!==JSON.stringify(answers))fail(409,'Submitted answers cannot change');
@@ -130,8 +133,8 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
       }
       if(a.status!=='issued')fail(409,'Exam is finished');
       const keys=(await tx.query(`select k.* from training_private.training_exam_keys k join public.training_exam_questions q on q.id=k.question_id where q.exam_version_id=$1`,[a.exam_version_id])).rows;
-      if(keys.length!==50)fail(409,'Exam content is inconsistent');
-      const score=answers.filter(r=>keys.some(k=>k.question_id===r.question_id&&k.correct_option===r.selected_option)).length*2,passed=score>=Number(a.pass_percent);
+      if(keys.length!==a.question_count)fail(409,'Exam content is inconsistent');
+      const score=answers.filter(r=>keys.some(k=>k.question_id===r.question_id&&k.correct_option===r.selected_option)).length*100/a.question_count,passed=score>=Number(a.pass_percent);
       for(const answer of answers)await tx.query('insert into training_private.training_exam_answers(attempt_id,question_id,selected_option) values($1,$2,$3)',[attempt.id,answer.question_id,answer.selected_option]);
       const saved=(await tx.query('update public.training_exam_attempts set submitted_at=now(),score_percent=$2,passed=$3 where id=$1 returning *',[attempt.id,score,passed])).rows[0];
       if(passed||attempt.attempt_number>=a.max_attempts)await tx.query("update public.training_exam_assignments set status='completed' where id=$1",[a.id]);

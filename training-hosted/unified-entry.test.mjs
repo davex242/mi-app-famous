@@ -10,6 +10,8 @@ const prior={window:globalThis.window,storage:globalThis.localStorage,fetch:glob
 const store=new Map(),project='https://aaaaaaaaaaaaaaaaaaaa.supabase.co';
 const fixture={enabled:true,legacy:true,training:true,providerLogins:0,providerLogouts:0,legacyUpdates:0,profile:null,context:null};
 globalThis.unifiedFixture=fixture;
+const sessionStore=new Map();
+globalThis.sessionStorage={getItem:key=>sessionStore.get(key)||null,setItem:(key,value)=>sessionStore.set(key,value),removeItem:key=>sessionStore.delete(key)};
 try {
   const output=join(directory,'entry.mjs');
   await build({stdin:{contents:`export {AuthProvider} from ${JSON.stringify(new URL('../src/context/AuthContext.tsx',import.meta.url).pathname)};export {sharedTrainingApi,logoutSharedTraining} from ${JSON.stringify(new URL('../src/components/training/sharedTrainingSession.ts',import.meta.url).pathname)};`,resolveDir:directory},bundle:true,format:'esm',platform:'node',outfile:output,plugins:[{name:'controlled-providers',setup(builder){

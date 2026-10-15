@@ -316,7 +316,7 @@ export default function CommissionManagement({ onBack }: CommissionManagementPro
       document.body.removeChild(link);
       
       // Log the export activity
-      ActivityLogger.log(user, 'EXPORT', 'commission_report', 'csv', {
+      ActivityLogger.log(user, 'EXPORT', 'commission_report', 'csv', undefined, {
         totalRecruiters: reportData.length,
         totalHosts,
         grandTotal
@@ -621,7 +621,7 @@ export default function CommissionManagement({ onBack }: CommissionManagementPro
       };
 
       // Log the export activity
-      ActivityLogger.log(user, 'EXPORT', 'commission_report', 'pdf', {
+      ActivityLogger.log(user, 'EXPORT', 'commission_report', 'pdf', undefined, {
         totalRecruiters: reportData.length,
         totalHosts,
         grandTotal

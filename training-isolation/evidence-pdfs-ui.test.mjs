@@ -46,7 +46,7 @@ test('PDF evidence browser: explicit metadata disclosure, exact download, review
    if(process.env.UI_SCREENSHOT_DIR){await mkdir(process.env.UI_SCREENSHOT_DIR,{recursive:true});await administrator.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-evidence-pdf-desktop.png',fullPage:true});}
   });
   await t.test('readonly mobile can download assigned PDFs and previous recruiter immediately loses access',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);await recruiter.locator(`[data-download-evidence="${second.id}"]`).click();await recruiter.locator('#notice.error').waitFor();
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);await recruiter.locator(`[data-download-evidence="${second.id}"]`).click();await recruiter.locator('#notice.error').waitFor();
    readonly=await login('readonly',{width:390,height:844});assert.equal(await readonly.locator('#evidence-form').count(),0);assert.equal(await readonly.locator('[data-review]').count(),0);assert.equal(await readonly.locator(`[data-preview-evidence="${second.id}"]`).isDisabled(),true);assert.ok(await readonly.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    const pending=readonly.waitForEvent('download');await readonly.locator(`[data-download-evidence="${second.id}"]`).click();assert.deepEqual(await readFile(await(await pending).path()),bytes);
    if(process.env.UI_SCREENSHOT_DIR){await readonly.screenshot({path:process.env.UI_SCREENSHOT_DIR+'/training-evidence-pdf-mobile.png',fullPage:true});}

@@ -724,7 +724,7 @@ export default function Dashboard({ onAddNew }: DashboardProps) {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">{host.host_name}</span>
                         {host.real && (
-                          <CheckCircle className="w-4 h-4 text-green-500" title="Verified Real" />
+                          <CheckCircle className="w-4 h-4 text-green-500" aria-label="Verified Real" />
                         )}
                       </div>
                     </td>

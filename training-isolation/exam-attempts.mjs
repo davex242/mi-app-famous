@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 // Existing append-only audit records hold requests and decisions; no schema change.
-export async function examAttemptBudget(tx,enrollmentId){
- const events=(await tx.query("select * from public.training_events where enrollment_id=$1 and event_type in ('exam_extra_requested','exam_extra_approved','exam_extra_rejected') order by created_at,id",[enrollmentId])).rows;
+export async function examAttemptBudget(tx,enrollmentId,sessionId=null){
+ const events=sessionId?[]:(await tx.query("select * from public.training_events where enrollment_id=$1 and event_type in ('exam_extra_requested','exam_extra_approved','exam_extra_rejected') order by created_at,id",[enrollmentId])).rows;
  const requests=events.filter(row=>row.event_type==='exam_extra_requested');let extra=0;
  const projected=requests.map(request=>{
   const decisions=events.filter(row=>row.entity_id===request.entity_id&&row.event_type!=='exam_extra_requested');
@@ -11,7 +11,7 @@ export async function examAttemptBudget(tx,enrollmentId){
   if(decision?.event_type==='exam_extra_approved'){if(decision.details.extra_attempts!==quantity||!decision.actor_app_user_id)throw Error('Inconsistent attempt grant');extra+=quantity;}
   return {id:request.entity_id,enrollment_id:enrollmentId,extra_attempts:quantity,reason:request.details.reason,requested_by:request.actor_app_user_id,requested_at:request.created_at,status:decision?(decision.event_type==='exam_extra_approved'?'approved':'rejected'):'pending',review_notes:decision?.details.review_notes??null,reviewed_by:decision?.actor_app_user_id??null,reviewed_at:decision?.created_at??null};
  });
- const used=(await tx.query('select count(*)::integer as used from public.training_exam_attempts t join public.training_exam_assignments a on a.id=t.assignment_id where a.enrollment_id=$1',[enrollmentId])).rows[0].used;
+ const used=(await tx.query(`select count(*)::integer as used from public.training_exam_attempts t join public.training_exam_assignments a on a.id=t.assignment_id join public.training_exam_versions v on v.id=a.exam_version_id where a.enrollment_id=$1 and (($2::text is null and v.exam_key not like 'session-%') or v.exam_key='session-'||$2::text)`,[enrollmentId,sessionId])).rows[0].used;
  return {initial:3,approved_extra:extra,total:3+extra,used,remaining:Math.max(0,3+extra-used),requests:projected};
 }
 export function createAttemptApprovalOperations(run,{fields,text,uuid,fail,requireAdmin,requireWrite,enrollment,audit}){

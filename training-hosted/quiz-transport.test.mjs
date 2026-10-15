@@ -7,7 +7,7 @@ runInNewContext(await readFile(new URL('../public/training-quiz/quiz.mjs',import
   location:{hash:'#'+token,pathname:'/training-quiz/index.html'},
   history:{replaceState:(_state,_title,path)=>{assert.equal(path,'/training-quiz/index.html');removed=true;}},
   window:{addEventListener(){}},document:{querySelector:selector=>selector==='#quiz-content'?content:message},
-  fetch:async(url,options)=>{assert.ok(removed);calls.push({url,options});return {ok:true,json:async()=>({pass_percent:75,max_attempts:3,expires_at:'2030-01-01T00:00:00Z',can_start:true,attempts:[]})};},
+  fetch:async(url,options)=>{assert.ok(removed);calls.push({url,options});return {ok:true,json:async()=>({question_count:25,pass_percent:75,max_attempts:3,expires_at:'2030-01-01T00:00:00Z',can_start:true,attempts:[]})};},
   Date,Error,JSON,FormData,URL,encodeURIComponent,setTimeout,clearTimeout
 });
 await new Promise(resolve=>setTimeout(resolve,0));
@@ -17,5 +17,6 @@ assert.equal(calls[0].options.headers['x-training-authorization'],'Bearer '+toke
 assert.equal(calls[0].options.headers.authorization,undefined);
 assert.ok(content.innerHTML.includes('Antes de empezar'));
 assert.ok(content.innerHTML.includes('75%'));
+assert.ok(content.innerHTML.includes('Responde las 25 preguntas'));
 assert.ok(content.innerHTML.includes('3'));
 console.log('Quiz startup transport passed: fixed gateway, dedicated invitation header and fragment removal before requests.');

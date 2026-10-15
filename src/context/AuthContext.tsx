@@ -73,14 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return { success: true };
     } catch (err) {
-      await logoutSharedTraining();setUser(null);localStorage.removeItem('hostmanager_user');sessionStorage.removeItem('famous_preview_app_profile');sessionStorage.removeItem('famous_preview_app_profile');
+      await logoutSharedTraining();setUser(null);localStorage.removeItem('hostmanager_user');sessionStorage.removeItem('famous_preview_app_profile');
       return { success: false, error: 'Login failed' };
     }
   };
 
   const logout = async () => {
     const trainingLogout=logoutSharedTraining();
-    setUser(null);localStorage.removeItem('hostmanager_user');
+    setUser(null);localStorage.removeItem('hostmanager_user');sessionStorage.removeItem('famous_preview_app_profile');sessionStorage.removeItem('famous_training_section');
     await trainingLogout;
     // Log the logout activity after credentials/session state is cleared
     if (user) {

@@ -78,13 +78,13 @@ test('private evidence images: scoped immutable proofs, consent, checksums and a
    await db.query('insert into training_private.local_evidence_content(evidence_id,body) values($1,$2)',[replacement.id,saved]);await service.completeItem(tokens.admin,{session_id:s.id});
   });
   await t.test('readonly assignee can read historical proof; former owner loses access immediately',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.read.app_user_id,demo.host_id]);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.read.app_user_id,demo.host_id]);
    assert.equal((await service.previewEvidenceFile(tokens.read,{evidence_id:replacement.id})).image.width,320);
    await assert.rejects(()=>service.downloadEvidenceFile(tokens.edit,{evidence_id:replacement.id}),e=>e.status===404);assert.equal((await service.workspace(tokens.edit)).evidence.length,0);
    await db.query("update public.training_enrollments set status='cancelled' where id=$1",[e.id]);assert.ok((await service.downloadEvidenceFile(tokens.read,{evidence_id:replacement.id})).image_base64);
    await assert.rejects(()=>service.submitEvidence(tokens.admin,body()),e=>e.status===409);
    await db.query('update training_private.training_principals set is_active=false where auth_user_id=$1',[users.read.auth_user_id]);await assert.rejects(()=>service.previewEvidenceFile(tokens.read,{evidence_id:replacement.id}),e=>e.status===401);
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.edit.app_user_id,demo.host_id]);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.edit.app_user_id,demo.host_id]);
   });
   await t.test('closing freezes verified attachment metadata and blocks a changed file after preview',async()=>{
    scenario=await seedClosingScenario(db,service,{admin:tokens.admin,recruiter:tokens.edit},{validated:2,demo,proofImageBase64:imageFixture().toString('base64')});

@@ -65,5 +65,5 @@ export class HostedTrainingApi extends LocalTrainingApi{
   const response=await fetch(this.config.url+'/auth/v1/signup',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
   if(!response.ok)throw new LocalTrainingError(response.status===429?429:400);
  }
- async logout(){const token=this.token;this.clear();this.refreshToken=null;this.expiresAt=0;sessionStorage.removeItem(HostedTrainingApi.sessionKey);if(token){try{await fetch(this.config.url+'/auth/v1/logout?scope=local',{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(10000),headers:{apikey:this.config.key,Authorization:'Bearer '+token}});}catch{}}}
+ async logout(){const token=this.token;this.clear();this.refreshToken=null;this.expiresAt=0;sessionStorage.removeItem(HostedTrainingApi.sessionKey);sessionStorage.removeItem('famous_training_section');if(token){try{await fetch(this.config.url+'/auth/v1/logout?scope=local',{method:'POST',credentials:'omit',redirect:'error',signal:AbortSignal.timeout(10000),headers:{apikey:this.config.key,Authorization:'Bearer '+token}});}catch{}}}
 }

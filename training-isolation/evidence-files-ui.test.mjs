@@ -53,7 +53,7 @@ test('evidence browser: consent, PNG/JPEG upload, scoped preview/download, revie
    await administrator.locator('#assessment-form [name="notes"]').fill('DEMO evaluación');await administrator.locator('#assessment-form button[type="submit"]').click();await administrator.locator('#notice').filter({hasText:'Evaluación registrada.'}).waitFor();await administrator.locator('#complete-button').click();await administrator.locator('#notice').filter({hasText:'Práctica validada.'}).waitFor();assert.equal((await service.workspace(token)).progress[0].completed_items,1);
   });
   await t.test('reassignment denies a former owner; mobile readonly sees files without upload or review controls',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);
    await recruiter.locator(`[data-preview-evidence="${second.id}"]`).click();await recruiter.locator('#notice.error').waitFor();assert.equal(await recruiter.locator('#evidence-preview').isVisible(),false);
    readonly=await login('readonly',{width:390,height:844});assert.equal(await readonly.locator('#evidence-form').count(),0);assert.equal(await readonly.locator('[data-review]').count(),0);
    await readonly.locator(`[data-preview-evidence="${second.id}"]`).click();await readonly.waitForFunction(()=>document.querySelector('#evidence-preview-image').naturalWidth===768);assert.ok(await readonly.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.ok(await readonly.locator('#evidence-preview-image').evaluate(el=>el.getBoundingClientRect().width<=innerWidth));

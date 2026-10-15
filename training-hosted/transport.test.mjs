@@ -7,6 +7,8 @@ import {pathToFileURL} from 'node:url';
 const {build}=createRequire(join(process.env.APP_NODE_MODULES,'_transport_test.cjs'))('esbuild');
 const directory=await mkdtemp(join(tmpdir(),'training-transport-'));
 const prior={window:globalThis.window,fetch:globalThis.fetch};
+const sessionStore=new Map();
+globalThis.sessionStorage={getItem:key=>sessionStore.get(key)||null,setItem:(key,value)=>sessionStore.set(key,value),removeItem:key=>sessionStore.delete(key)};
 try {
   const output=join(directory,'api.mjs');
   await build({entryPoints:[new URL('../src/components/training/HostedTrainingApi.ts',import.meta.url).pathname],bundle:true,format:'esm',platform:'node',outfile:output});

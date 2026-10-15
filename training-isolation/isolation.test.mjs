@@ -40,6 +40,7 @@ test('isolated PostgreSQL: draft compilation and authorization matrix', async t 
     const schema = original.replace(guard, '-- Guard removed inside in-memory test only.').replace(/rollback;\s*$/, 'commit;');
     await t.test('draft executes on PostgreSQL with synthetic UUID prerequisites', async () => {
       await db.exec(schema);
+      await db.exec(await readFile(new URL('../training-hosted/enrollment-scope.sql',import.meta.url),'utf8'));
       const { rows } = await db.query("select count(*)::integer as n from pg_tables where schemaname='public' and tablename like 'training_%'");
       assert.equal(rows[0].n, 18);
     });
@@ -131,8 +132,8 @@ test('isolated PostgreSQL: draft compilation and authorization matrix', async t 
       assert.equal((await asUser(db, users.editA, 'select * from public.training_enrollments')).rows.length, 0);
       await db.query('update training_private.training_principals set is_active=true where auth_user_id=$1', [users.editA]);
     });
-    await t.test('host reassignment revokes old scope and grants new scope immediately', async () => {
-      await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2', [users.editB, id(200)]);
+    await t.test('enrollment reassignment revokes old scope and grants new scope immediately', async () => {
+      await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2', [users.editB, id(200)]);
       assert.equal((await asUser(db, users.editA, 'select * from public.training_enrollments')).rows.length, 0);
       assert.equal((await asUser(db, users.editB, 'select * from public.training_enrollments')).rows.length, 2);
     });
@@ -156,7 +157,7 @@ test('isolated PostgreSQL: draft compilation and authorization matrix', async t 
       await assert.rejects(insert(db, 'public.training_approvals', { requested_by: users.editA }), err => err.code === '23514');
       await assert.rejects(insert(db, 'public.training_approvals', { requested_by: users.editA, topic_id: topic, material_id: material }), err => err.code === '23514');
     });
-    await t.test('Final Quiz declaration rejects 49 and 51 questions', async () => {
+    await t.test('Final Quiz declaration rejects unsupported question counts', async () => {
       for (const count of [49, 51]) await assert.rejects(insert(db, 'public.training_exam_versions', { exam_key: 'INVALID', version: count, question_count: count, pass_percent: 80, created_by: users.superadmin }), err => err.code === '23514');
     });
     await t.test('duplicate open attempt is rejected', async () => {

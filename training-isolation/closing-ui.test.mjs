@@ -79,7 +79,7 @@ test('closing UI: checklist, administrative confirmation and readonly mobile rec
    assert.match(await recruiter.locator('.closing-record').textContent(),/2 de 2 prácticas · Quiz 100%/);
   });
   await t.test('assigned readonly can inspect a mobile record without writes, overflow or external traffic',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,scenario.e.host_id]);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,scenario.e.host_id]);
    const p=await login('readonly',{width:390,height:844});assert.equal(await p.locator('.closing-record').count(),1);assert.equal(await p.locator('#closing-confirm-form').count(),0);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.equal(await p.locator('.closing-record img').count(),0);
    const promise=p.waitForEvent('download');await p.locator('[data-export-closing][data-format="json"]').click();const download=await promise;assert.equal(JSON.parse(await readFile(await download.path(),'utf8')).conclusion,notes);

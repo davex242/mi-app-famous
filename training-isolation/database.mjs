@@ -37,6 +37,7 @@ export async function upgradePreEvidenceCopy(tx) {
   const previous=createHash('sha256').update(s.bootstrap+s.sql+legacyLocalTables).digest('hex');
   if(previous!==PRE_EVIDENCE_SCHEMA)throw Error('Unsupported local copy upgrade');
   await tx.exec(evidenceTables);
+  await tx.exec(await readFile(new URL('../training-hosted/enrollment-scope.sql',import.meta.url),'utf8'));
 }
 
 async function schemaSources() {
@@ -49,7 +50,7 @@ async function schemaSources() {
   return {bootstrap,sql,executable:sql.replace(guard,'-- Isolated synthetic sandbox only').replace(/rollback;\s*$/,'commit;')};
 }
 export async function sandboxSchemaFingerprint() {
-  const s=await schemaSources();return createHash('sha256').update(s.bootstrap+s.sql+localTables).digest('hex');
+  const s=await schemaSources();const migration=await readFile(new URL('../training-hosted/enrollment-scope.sql',import.meta.url),'utf8');return createHash('sha256').update(s.bootstrap+s.sql+localTables+migration).digest('hex');
 }
 // Caller must supply a new, exclusively owned synthetic database, never an existing service.
 export async function initializeSandboxSchema(db) {
@@ -57,6 +58,7 @@ export async function initializeSandboxSchema(db) {
   await db.exec(s.bootstrap);
   await db.exec(s.executable);
   await db.exec(localTables);
+  await db.exec(await readFile(new URL('../training-hosted/enrollment-scope.sql',import.meta.url),'utf8'));
 }
 
 // Deliberately has no URL, connection-string or persistent-directory argument.

@@ -3,9 +3,9 @@ import {parsePrivateExamFile,PRIVATE_EXAM_MAX_BYTES} from '../src/components/tra
 import {trainingContentProposal} from '../src/components/training/studyCatalogueData.mjs';
 import {examTemplate} from './exam-template.mjs';
 // Synthetic fixtures only; the owner's actual bank never belongs in this repository.
-export function syntheticPrivateExam(){return {key:'Synthetic private import',status:'draft',review_status:'accepted_for_initial_testing',pass_percent:75,max_attempts:3,expires_at:null,extra_attempts_require_preapproval:true,invitation_hours:24,questions:examTemplate().map((row,index)=>({id:'synthetic-'+index,unit_key:trainingContentProposal.units[index%14].key,...row,review_rationale:'Synthetic review rationale '+index,review_status:'accepted_for_initial_testing'}))};}
+export function syntheticPrivateExam(){return {key:'Synthetic private import',status:'draft',review_status:'accepted_for_initial_testing',pass_percent:75,max_attempts:3,expires_at:null,extra_attempts_require_preapproval:true,invitation_hours:24,questions:examTemplate().slice(0,25).map((row,index)=>({id:'synthetic-'+index,unit_key:trainingContentProposal.units[index%14].key,...row,review_rationale:'Synthetic review rationale '+index,review_status:'accepted_for_initial_testing'}))};}
 let checks=0;const good=syntheticPrivateExam();
-const parsed=parsePrivateExamFile(JSON.stringify(good));assert.equal(parsed.questions.length,50);assert.equal(parsed.unit_count,14);assert.equal(parsed.pass_percent,75);assert.deepEqual(Object.keys(parsed.questions[0]).sort(),['correct_option','options','prompt']);checks++;
+const parsed=parsePrivateExamFile(JSON.stringify(good));assert.equal(parsed.questions.length,25);assert.equal(parsed.unit_count,14);assert.equal(parsed.pass_percent,75);assert.deepEqual(Object.keys(parsed.questions[0]).sort(),['correct_option','options','prompt']);checks++;
 for(const change of [
  x=>x.questions.pop(),x=>x.questions.push(x.questions[0]),x=>x.pass_percent=80,x=>x.max_attempts=4,x=>x.invitation_hours=48,x=>x.extra_attempts_require_preapproval=false,
  x=>x.expires_at='2030-01-01T00:00:00.000Z',x=>x.status='published',x=>x.review_status='pending',x=>x.extra='untrusted',x=>x.key='x'.repeat(81),

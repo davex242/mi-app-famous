@@ -24,6 +24,10 @@ import { supabase } from '@/lib/supabase';
 import { ActivityLog, ActionType } from '@/types';
 
 const ACTION_TYPE_CONFIG: Record<ActionType, { label: string; icon: React.ElementType; color: string }> = {
+  password_reset: { label: 'Password Reset', icon: CheckCircle, color: 'bg-orange-100 text-orange-700' },
+  bulk_verification: { label: 'Bulk Verification', icon: CheckCircle, color: 'bg-green-100 text-green-700' },
+  commission_settings_update: { label: 'Commission Settings', icon: DollarSign, color: 'bg-yellow-100 text-yellow-700' },
+  EXPORT: { label: 'Export', icon: Download, color: 'bg-cyan-100 text-cyan-700' },
   login: { label: 'Login', icon: LogIn, color: 'bg-blue-100 text-blue-700' },
   logout: { label: 'Logout', icon: LogOut, color: 'bg-gray-100 text-gray-700' },
   create: { label: 'Create', icon: Plus, color: 'bg-green-100 text-green-700' },
@@ -54,7 +58,7 @@ export default function ActivityLogs() {
   });
   
   // Users for filter dropdown
-  const [users, setUsers] = useState<{ name: string; email: string }[]>([]);
+  const [users, setUsers] = useState<{ user_name: string; user_email: string }[]>([]);
 
   // Detail modal
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);

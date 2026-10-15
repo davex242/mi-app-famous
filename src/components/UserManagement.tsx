@@ -68,7 +68,7 @@ export default function UserManagement() {
     finally { setLoading(false); }
   };
 
-  const resetForm = () => { setFormData({ email: '', password: '', name: '', role: 'readonly' }); setErrors({}); setEditingUser(null); };
+  const resetForm = () => { setFormData({ email: '', password: '', name: '', mico_id: '', role: 'readonly' }); setErrors({}); setEditingUser(null); };
   const openAddForm = () => { resetForm(); setShowForm(true); };
   const openEditForm = (user: AppUser) => { setEditingUser(user); setFormData({ email: user.email, password: '', name: user.name, mico_id: user.mico_id || '', role: user.role }); setShowForm(true); };
 
@@ -230,13 +230,9 @@ export default function UserManagement() {
       if (error) throw error;
 
       // Log the activity
-      await ActivityLogger.log({
-        action: 'password_reset',
-        user_name: currentUser?.name || 'Unknown',
-        user_email: currentUser?.email || 'Unknown',
-        details: `Admin reset password for user: ${resetPasswordModal.name} (${resetPasswordModal.email})`,
-        metadata: { target_user: resetPasswordModal.email }
-      });
+      await ActivityLogger.log(currentUser, 'password_reset',
+        `Admin reset password for user: ${resetPasswordModal.name} (${resetPasswordModal.email})`,
+        'user', resetPasswordModal.id, { target_user: resetPasswordModal.email });
 
       // Send email notification if enabled
       if (sendEmailNotification) {

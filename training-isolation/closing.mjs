@@ -6,16 +6,15 @@ const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('h
 export async function scopedClosingRecords(tx,actor,admin) {
   return (await tx.query(`select ev.id,ev.enrollment_id,ev.actor_app_user_id,ev.created_at,ev.details
     from public.training_events ev join public.training_enrollments e on e.id=ev.enrollment_id
-    join training_private.training_host_assignments h on h.host_id=e.host_id
-    where ev.event_type='training_completed' and ($1::boolean or h.recruiter_id=$2)
+    where ev.event_type='training_completed' and ($1::boolean or e.recruiter_id=$2)
     order by ev.created_at,ev.id`,[admin(actor),actor.app_user_id])).rows;
 }
 export async function scopedExamIssuances(tx,actor,admin) {
   return (await tx.query(`select ev.entity_id as assignment_id,ev.details->>'program_version_id' as program_version_id
     from public.training_events ev join public.training_exam_assignments a on a.id=ev.entity_id
-    join training_private.training_host_assignments h on h.host_id=a.host_id
+    join public.training_enrollments e on e.id=a.enrollment_id
     where ev.event_type='exam_issued' and ev.entity_type='exam_assignment'
-      and ($1::boolean or h.recruiter_id=$2)`,[admin(actor),actor.app_user_id])).rows;
+      and ($1::boolean or e.recruiter_id=$2)`,[admin(actor),actor.app_user_id])).rows;
 }
 
 export function createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,enrollment,audit}) {
@@ -48,7 +47,7 @@ export function createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,
     let quiz={attempt_id:null,ready:false,problems:['verified_passing_quiz_missing'],score_percent:null,pass_percent:null};
     if(body.attempt_id!==undefined){
     const attempt=(await tx.query(`select t.id,t.assignment_id,t.attempt_number,t.submitted_at,t.score_percent,t.passed,
-      a.host_id,a.enrollment_id,a.exam_version_id,v.pass_percent,v.status as exam_status,v.exam_key,v.version
+      a.host_id,a.enrollment_id,a.exam_version_id,v.pass_percent,v.question_count,v.status as exam_status,v.exam_key,v.version
       from public.training_exam_attempts t join public.training_exam_assignments a on a.id=t.assignment_id
       join public.training_exam_versions v on v.id=a.exam_version_id where t.id=$1 and a.enrollment_id=$2 and a.host_id=$3`,[uuid(body.attempt_id),e.id,e.host_id])).rows[0];
     if(!attempt)fail(404,'Record unavailable');
@@ -56,14 +55,14 @@ export function createClosingOperations(run,{fields,text,uuid,fail,requireAdmin,
     const questions=(await tx.query(`select q.id,q.options,k.correct_option from public.training_exam_questions q
       left join training_private.training_exam_keys k on k.question_id=q.id where q.exam_version_id=$1 order by q.position`,[attempt.exam_version_id])).rows;
     const answers=(await tx.query('select question_id,selected_option from training_private.training_exam_answers where attempt_id=$1',[attempt.id])).rows;
-    const valid=questions.length===50&&answers.length===50&&questions.every(q=>{
+    const valid=questions.length===attempt.question_count&&answers.length===attempt.question_count&&questions.every(q=>{
       const answer=answers.find(a=>a.question_id===q.id);
       return answer&&Number.isInteger(q.correct_option)&&q.correct_option>=0&&q.correct_option<q.options.length&&answer.selected_option>=0&&answer.selected_option<q.options.length;
     });
-    const recomputed=valid?answers.filter(a=>questions.some(q=>q.id===a.question_id&&q.correct_option===a.selected_option)).length*2:null;
+    const recomputed=valid?answers.filter(a=>questions.some(q=>q.id===a.question_id&&q.correct_option===a.selected_option)).length*100/attempt.question_count:null;
     const quizProblems=[];
     if(issued?.program_version_id!==program.id)quizProblems.push('quiz_program_version_mismatch');
-    if(!valid||!attempt.submitted_at||attempt.passed!==true||Number(attempt.score_percent)!==recomputed||recomputed<Number(attempt.pass_percent)||attempt.exam_status!=='published')quizProblems.push('verified_passing_quiz_missing');
+    if(attempt.exam_key.startsWith('session-')||!valid||!attempt.submitted_at||attempt.passed!==true||Number(attempt.score_percent)!==recomputed||recomputed<Number(attempt.pass_percent)||attempt.exam_status!=='published')quizProblems.push('verified_passing_quiz_missing');
     quiz={attempt_id:attempt.id,assignment_id:attempt.assignment_id,exam_version_id:attempt.exam_version_id,
       exam_key:attempt.exam_key,exam_version:attempt.version,program_version_id:issued?.program_version_id||null,
       submitted_at:attempt.submitted_at,score_percent:attempt.score_percent===null?null:Number(attempt.score_percent),

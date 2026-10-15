@@ -44,7 +44,7 @@ async function scope(tx, actor, host) {
 async function enrollment(tx, actor, key, write = true) {
   const { rows } = await tx.query('select * from public.training_enrollments where id=$1 for update', [uuid(key)]);
   if (!rows.length) fail(404, 'Record unavailable');
-  await scope(tx, actor, rows[0].host_id);
+  if (!admin(actor) && rows[0].recruiter_id !== actor.app_user_id) fail(404, 'Record unavailable');
   if (write && rows[0].status !== 'active') fail(409, 'Enrollment is not active');
   return rows[0];
 }
@@ -114,16 +114,16 @@ export function createTrainingService(db,{verifiedActor=null,readerRole='authent
     }),
     workspace: token => run(token, async (tx, actor) => {
       const trainees = (await tx.query(`select host_id,recruiter_id from training_private.training_host_assignments
-        where $1::boolean or recruiter_id=$2 order by host_id`, [admin(actor), actor.app_user_id])).rows;
+        where $1::boolean or recruiter_id=$2 or host_id in (select host_id from public.training_enrollments where recruiter_id=$2) order by host_id`, [admin(actor), actor.app_user_id])).rows;
       const attemptBudgets=[];
-      const scopedEnrollments=(await tx.query('select id from public.training_enrollments where host_id=any($1::uuid[])',[trainees.map(row=>row.host_id)])).rows;
+      const scopedEnrollments=(await tx.query('select id from public.training_enrollments where $1::boolean or recruiter_id=$2',[admin(actor),actor.app_user_id])).rows;
       for(const e of scopedEnrollments)attemptBudgets.push({enrollment_id:e.id,...await examAttemptBudget(tx,e.id)});
       const exams=(await tx.query("select id,exam_key,version,status,question_count,pass_percent from public.training_exam_versions where status='published' order by exam_key,version desc")).rows;
       const closingRecords=await scopedClosingRecords(tx,actor,admin);
       const issuances=await scopedExamIssuances(tx,actor,admin);
       const revoked=(await tx.query(`select t.assignment_id,t.revoked_at from training_private.training_exam_tokens t
-        join public.training_exam_assignments a on a.id=t.assignment_id join training_private.training_host_assignments h on h.host_id=a.host_id
-        where $1::boolean or h.recruiter_id=$2`,[admin(actor),actor.app_user_id])).rows;
+        join public.training_exam_assignments a on a.id=t.assignment_id join public.training_enrollments e on e.id=a.enrollment_id
+        where $1::boolean or e.recruiter_id=$2`,[admin(actor),actor.app_user_id])).rows;
       await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [actor.auth_user_id]);
       await tx.exec(`set local role ${readerRole}`);
       const result = { sandbox: true, exams,closing_records:closingRecords, trainees: trainees.map((row, i) => ({ ...row, label: `Emisor DEMO ${i + 1}` })) };
@@ -143,6 +143,16 @@ export function createTrainingService(db,{verifiedActor=null,readerRole='authent
         return {...s,current_item_id:effectiveItemId(s.item_id,result.update_history.filter(h=>h.enrollment_id===s.enrollment_id),result.program_items.filter(i=>i.program_version_id===e?.program_version_id))};
       });
       return result;
+    }),
+    reassignEnrollment: (token, body) => run(token, async (tx, actor) => {
+      requireAdmin(actor); fields(body, ['enrollment_id', 'trainer_id']);
+      const e = await enrollment(tx, actor, body.enrollment_id);
+      const trainer = uuid(body.trainer_id);
+      if (!(await tx.query("select app_user_id from training_private.training_principals where app_user_id=$1 and is_active and role in ('edit','subadmin','superadmin') for share", [trainer])).rows.length) fail(409, 'Active trainer required');
+      if (e.recruiter_id === trainer) return e;
+      const saved = (await tx.query('update public.training_enrollments set recruiter_id=$2 where id=$1 returning *', [e.id, trainer])).rows[0];
+      await audit(tx, actor, 'enrollment_reassigned', 'enrollment', e.id, e.id, {previous_trainer_id:e.recruiter_id,trainer_id:trainer});
+      return saved;
     }),
     enroll: (token, body) => run(token, async (tx, actor) => {
       requireWrite(actor); fields(body, ['host_id', 'program_version_id', 'timezone']);

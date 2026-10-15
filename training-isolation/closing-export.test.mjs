@@ -51,7 +51,7 @@ test('closing export: frozen report, scoped access, private fields and download 
    assert.equal((await service.exportClosing(tokens.admin,body('json'))).content,json.content);assert.equal((await service.exportClosing(tokens.admin,body('html'))).content,html.content);
   });
   await t.test('current reassignment revokes prior recruiter export and permits assigned readonly',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.read.app_user_id,scenario.e.host_id]);assert.equal((await call(body('html'),tokens.recruiter)).status,404);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.read.app_user_id,scenario.e.host_id]);assert.equal((await call(body('html'),tokens.recruiter)).status,404);
    assert.equal((await service.exportClosing(tokens.read,body('json'))).content,json.content);
   });
   await t.test('deactivation or revoked session blocks export immediately',async()=>{

@@ -161,7 +161,7 @@ create table public.training_completions (
 create table public.training_exam_versions (
   id uuid primary key default gen_random_uuid(), exam_key text not null, version integer not null check(version>0),
   status text not null default 'draft' check(status in ('draft','in_review','published','archived')),
-  question_count integer not null default 50 check(question_count=50),
+  question_count integer not null default 25 check(question_count in (10,25,50)),
   pass_percent numeric(5,2) not null check(pass_percent between 0 and 100),
   created_by uuid not null references training_private.training_users(id), created_at timestamptz not null default now(),
   unique(exam_key,version)

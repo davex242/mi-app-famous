@@ -340,7 +340,7 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal((await db.query('select * from public.training_update_history')).rows.length,1);
     });
     await t.test('mobile layout fits viewport and exposes readonly data without actions', async () => {
-      await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2', [users.readonly.app_user_id, demo.host_id]);
+      await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2', [users.readonly.app_user_id, demo.host_id]);
       const mobile = await pageFor('readonly', { width: 390, height: 844 });
       assert.equal(await mobile.locator('#enroll-form').count(), 0);
       assert.equal(await mobile.locator('.readonly-note').count(), 1);
@@ -352,7 +352,7 @@ test('isolated browser UI: recruiter, administration and mobile', async t => {
       assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     });
     await t.test('readonly can consult update history on mobile without accepting changes',async()=>{
-      await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,authoredEnrollment.host_id]);
+      await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,authoredEnrollment.host_id]);
       const mobile=pages[2];
       await mobile.locator('[data-tab="updates"]').click();
       await mobile.locator('#refresh-button').click();

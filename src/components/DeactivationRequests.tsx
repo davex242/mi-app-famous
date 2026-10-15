@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  AlertTriangle, 
-  Check, 
-  X, 
-  RefreshCw, 
-  Clock, 
-  UserX, 
+import {
+  AlertTriangle,
+  Check,
+  X,
+  RefreshCw,
+  Clock,
+  UserX,
   Calendar,
   Mail,
   ChevronDown,
@@ -169,7 +169,7 @@ export default function DeactivationRequests() {
 
       if (!historyError && historyData) {
         setExecutionHistory(historyData);
-        
+
         // Try to get the last successful check result for active count
         const lastSuccess = historyData.find(h => h.status === 'success' && h.result_message);
         if (lastSuccess?.result_message) {
@@ -207,7 +207,7 @@ export default function DeactivationRequests() {
       // Check if we should run the job:
       // 1. If next_run_at has passed and we haven't run today
       // 2. Or if we've never run before
-      const shouldRun = !lastRun || 
+      const shouldRun = !lastRun ||
         (nextRun && now >= nextRun) ||
         (lastRun && now.toDateString() !== lastRun.toDateString() && now.getHours() >= 9);
 
@@ -327,16 +327,11 @@ export default function DeactivationRequests() {
         if (deactivateError) throw deactivateError;
 
         // Log the activity
-        await ActivityLogger.log({
-          action: 'update',
-          user_name: currentUser?.name || 'Unknown',
-          user_email: currentUser?.email || 'Unknown',
-          details: `Deactivated user ${request.recruiter_name} due to 3+ weeks of inactivity`,
-          metadata: { 
+        await ActivityLogger.log(currentUser, 'update',
+          `Deactivated user ${request.recruiter_name} due to 3+ weeks of inactivity`, 'user', request.user_id, {
             target_user: request.recruiter_name,
             days_inactive: request.days_inactive,
             reason: 'Prolonged inactivity'
-          }
         });
       }
 
@@ -837,15 +832,15 @@ export default function DeactivationRequests() {
                             </td>
                             <td className="px-4 py-4 text-sm">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                exec.triggered_by === 'manual' 
-                                  ? 'bg-blue-100 text-blue-700' 
+                                exec.triggered_by === 'manual'
+                                  ? 'bg-blue-100 text-blue-700'
                                   : exec.triggered_by === 'auto_scheduler'
                                   ? 'bg-purple-100 text-purple-700'
                                   : 'bg-gray-100 text-gray-700'
                               }`}>
-                                {exec.triggered_by === 'manual' ? 'Manual' : 
-                                 exec.triggered_by === 'auto_scheduler' ? 'Auto' : 
-                                 exec.triggered_by === 'external_cron' ? 'External Cron' : 
+                                {exec.triggered_by === 'manual' ? 'Manual' :
+                                 exec.triggered_by === 'auto_scheduler' ? 'Auto' :
+                                 exec.triggered_by === 'external_cron' ? 'External Cron' :
                                  exec.triggered_by}
                               </span>
                             </td>
@@ -961,7 +956,7 @@ export default function DeactivationRequests() {
 
           <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
             <p className="text-sm text-purple-800">
-              <strong>Note:</strong> The automatic check will run when an admin accesses this page after the scheduled time. 
+              <strong>Note:</strong> The automatic check will run when an admin accesses this page after the scheduled time.
               For guaranteed daily execution, set up an external cron service using the webhook URL.
             </p>
           </div>
@@ -1002,7 +997,7 @@ export default function DeactivationRequests() {
                 )}
                 <div>
                   <h3 className="font-semibold text-gray-900">
-                    {showConfirmModal.action === 'approve' 
+                    {showConfirmModal.action === 'approve'
                       ? `Deactivate ${showConfirmModal.request.recruiter_name}?`
                       : `Keep ${showConfirmModal.request.recruiter_name} Active?`
                     }

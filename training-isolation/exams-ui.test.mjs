@@ -70,7 +70,7 @@ test('quiz browser: administrator publication, recruiter invitation, mobile resp
    assert.equal((await db.query('select * from public.training_exam_attempts')).rows.length,1);
   });
   await t.test('assigned readonly can see score on mobile, without author/issue/revoke actions',async()=>{
-   await db.query('update training_private.training_host_assignments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);
+   await db.query('update public.training_enrollments set recruiter_id=$1 where host_id=$2',[users.readonly.app_user_id,demo.host_id]);
    const read=await login('readonly',{width:390,height:844});assert.equal(await read.locator('#exam-publish-form').count(),0);assert.equal(await read.locator('#exam-issue-form').count(),0);assert.equal(await read.locator('[data-revoke-exam]').count(),0);
    assert.match(await read.locator('#content').textContent(),/100% · Aprobado/);assert.ok(await read.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   });

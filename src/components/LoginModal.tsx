@@ -529,7 +529,7 @@ export default function LoginModal() {
                 </button>
               </form>
 
-              <p className="text-center text-slate-500 text-sm mt-4" data-mixed-content="true" data-mixed-content="true" data-mixed-content="true">
+              <p className="text-center text-slate-500 text-sm mt-4" data-mixed-content="true">
                 Didn't receive the code?{' '}
                 <button onClick={() => setViewMode('forgot-password')} className="text-blue-400 hover:text-blue-300">
                   Resend
