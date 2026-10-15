@@ -1,2 +1,0 @@
-export type StudyUnit={key:string;day:number;title:string;estimated_minutes:number;objective:string;guide:string[];practice:string[];evidence:string;review_criteria:string[];requires_evidence:boolean;requires_assessment:boolean};
-export const trainingContentProposal:{key:string;title:string;status:string;review_status:string;duration_days:number;question_count:number;pass_percent:number;max_attempts:number;extra_attempts_require_preapproval:boolean;expires_at:null;invitation_hours:number;units:StudyUnit[];agency_decisions:string[]};
