@@ -55,7 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const training=sharedTrainingApi(hostedTrainingConfig(),email);
       if(training){
         try {await training.login(email,password);}
-        catch {return {success:false,error:'La app validó tus datos, pero capacitación no pudo iniciar. Ambas cuentas deben usar la misma contraseña y la cuenta de capacitación debe estar confirmada y autorizada.'};}
+        catch (cause) {
+          const detail=cause instanceof Error?cause.message:'';
+          const known=detail.startsWith('La cuenta de capacitación no está confirmada.')||detail.startsWith('Demasiados intentos de acceso a capacitación.')||detail.startsWith('El servicio de autenticación de capacitación no está disponible temporalmente.')||detail.startsWith('Capacitación rechazó las credenciales.');
+          return {success:false,error:known?detail:'La app validó tus datos, pero no pudo completar la sesión de capacitación. Revisa la disponibilidad del servicio o la autorización de tu cuenta.'};
+        }
       }
       const profile={...data,password_hash:''};
 
