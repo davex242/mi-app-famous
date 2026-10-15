@@ -16,7 +16,6 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import RecruiterPortal from './RecruiterPortal';
 import AuditTrail from './AuditTrail';
 import DeactivationRequests from './DeactivationRequests';
-import HostTrainingDevelopment from './HostTrainingDevelopment';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -75,8 +74,6 @@ function AppContent() {
         return <AuditTrail />;
       case 'deactivation-requests':
         return <DeactivationRequests />;
-      case 'host-training':
-        return <HostTrainingDevelopment />;
       default:
         return <Dashboard onAddNew={handleAddNew} />;
     }
