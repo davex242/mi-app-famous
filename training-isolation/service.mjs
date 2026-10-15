@@ -136,8 +136,26 @@ export function createTrainingService(db,{verifiedActor=null,readerRole='authent
       result.exam_assignments=(await tx.query('select * from public.training_exam_assignments')).rows.map(a=>({...a,program_version_id:issuances.find(i=>i.assignment_id===a.id)?.program_version_id||null,revoked_at:revoked.find(t=>t.assignment_id===a.id)?.revoked_at||null}));
       result.exam_attempts=(await tx.query('select * from public.training_exam_attempts')).rows;
       result.exam_attempt_budgets=attemptBudgets;
-      result.progress=[];
-      for(const e of result.enrollments) result.progress.push(await currentProgress(tx,e));
+      // Reuse the workspace snapshot instead of issuing two SQL queries per enrollment.
+      const versionItemCount=new Map();
+      const itemVersion=new Map();
+      for(const item of result.program_items){
+        itemVersion.set(item.id,item.program_version_id);
+        versionItemCount.set(item.program_version_id,(versionItemCount.get(item.program_version_id)||0)+1);
+      }
+      const enrollmentById=new Map(result.enrollments.map(e=>[e.id,e]));
+      const completedCount=new Map();
+      for(const completion of result.completions){
+        const enrollment=enrollmentById.get(completion.enrollment_id);
+        if(enrollment&&itemVersion.get(completion.item_id)===enrollment.program_version_id){
+          completedCount.set(enrollment.id,(completedCount.get(enrollment.id)||0)+1);
+        }
+      }
+      result.progress=result.enrollments.map(e=>{
+        const total=versionItemCount.get(e.program_version_id)||0;
+        const completed=completedCount.get(e.id)||0;
+        return {enrollment_id:e.id,program_version_id:e.program_version_id,total_items:total,completed_items:completed,percent:total?Math.round(completed/total*1e4)/100:0};
+      });
       result.sessions=result.sessions.map(s=>{
         const e=result.enrollments.find(e=>e.id===s.enrollment_id);
         return {...s,current_item_id:effectiveItemId(s.item_id,result.update_history.filter(h=>h.enrollment_id===s.enrollment_id),result.program_items.filter(i=>i.program_version_id===e?.program_version_id))};
