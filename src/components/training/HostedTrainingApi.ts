@@ -21,6 +21,8 @@ export function hostedRequestError(status:number,reason:unknown){
   'Invalid decision':'Selecciona Aprobar o Rechazar antes de guardar la revisión.'
  };
  const error=new LocalTrainingError(status);
+ if(status===502||status===503||status===504)error.message='El servicio de capacitación no respondió correctamente. Intenta de nuevo en unos momentos; no repitas una inscripción sin comprobar antes si se guardó.';
+ else if(status===409)error.message='La operación no se completó por un conflicto de validación. Revisa el estado del padrón o del registro antes de volver a intentar.';
  if(typeof reason==='string'&&messages[reason])error.message=messages[reason];
  error.message+=' (API de capacitación: HTTP '+status+')';
  return error;
