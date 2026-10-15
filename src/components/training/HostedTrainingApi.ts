@@ -57,6 +57,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
   const data=await response.json();if(generation!==this.generation)throw new LocalTrainingError(401);if(typeof data.access_token!=='string'||data.access_token.length>8192)throw new LocalTrainingError(401);
   this.token=data.access_token;this.refreshToken=data.refresh_token;this.expiresAt=Date.now()+(Number(data.expires_in)||3600)*1000;this.persist();try{return await this.load();}catch(error){await this.logout();throw error;}
  }
+ async reassignEnrollment(enrollment_id:string,trainer_id:string){return this.request('/api/enrollments/reassign',{enrollment_id,trainer_id});}
  async identities(){return await this.request('/api/identity/list',{}) as {users:Record<string,unknown>[];hosts:Record<string,unknown>[]};}
  async saveIdentity(kind:'user'|'host',body:object){return this.request('/api/identity/'+kind,body);}
  async register(email:string,password:string){
