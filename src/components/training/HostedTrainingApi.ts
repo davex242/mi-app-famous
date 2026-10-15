@@ -53,7 +53,7 @@ export class HostedTrainingApi extends LocalTrainingApi{
   }finally{this.controllers.delete(controller);}
  }
  async resume(){return this.verified&&this.token?await this.load():await this.restore();}
- async connect(){const health=await this.request('/health') as {storage:string;initialized:boolean};if(health.storage!=='hosted-preview'||!health.initialized)throw new LocalTrainingError(503);this.verified=true;}
+ async connect(){const health=await this.request('/health') as {storage:string;initialized:boolean};if(health.storage!=='hosted-preview'||!health.initialized){const error=new LocalTrainingError(503);error.message='El servicio de capacitación Preview no está inicializado correctamente (HTTP 503).';throw error;}this.verified=true;}
  async login(email:string,password:string){
   this.clear();await this.connect();const generation=this.generation;
   const response=await fetch(this.config.url+'/auth/v1/token?grant_type=password',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
