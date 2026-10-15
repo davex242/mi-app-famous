@@ -48,8 +48,8 @@ export interface ActivityLog {
   action_description: string;
   entity_type: string;
   entity_id: string;
-  old_values: Record<string, any> | null;
-  new_values: Record<string, any> | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
   ip_address: string;
   created_at: string;
 }
@@ -82,3 +82,10 @@ export interface CountryCode {
 // Host Training & Development (Stage 1 — type contracts only)
 export * from './training';
 
+
+export interface RecruiterCommissionRow {
+  recruiter_name: string;
+  base_commission: string | number | null;
+  additional_percentage: string | number | null;
+  max_commission: string | number | null;
+}

@@ -1,3 +1,4 @@
+import { errorCode, errorMessage } from '@/lib/utils';
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -93,7 +94,7 @@ export default function UserManagement() {
     try {
       const micoData = micoIdSupported ? { mico_id: formData.mico_id.trim() || null } : {};
       if (editingUser) {
-        const updateData: any = { email: formData.email, name: formData.name, role: formData.role, ...micoData };
+        const updateData: Partial<AppUser> = { email: formData.email, name: formData.name, role: formData.role, ...micoData };
         if (formData.password) updateData.password_hash = formData.password;
         const { error } = await supabase.from('app_users').update(updateData).eq('id', editingUser.id);
         if (error) throw error;
@@ -102,9 +103,9 @@ export default function UserManagement() {
         if (error) throw error;
       }
       setShowForm(false); resetForm(); fetchUsers();
-    } catch (error: any) {
-      if (error.code === '23505' && /app_users_mico_id_key/.test(error.message || '')) setErrors({ mico_id: 'Este MICO ID ya pertenece a otro usuario.' });
-      else if (error.code === '23505') setErrors({ email: 'Email already exists' });
+    } catch (error) {
+      if (errorCode(error) === '23505' && /app_users_mico_id_key/.test(errorMessage(error, ''))) setErrors({ mico_id: 'Este MICO ID ya pertenece a otro usuario.' });
+      else if (errorCode(error) === '23505') setErrors({ email: 'Email already exists' });
       else alert('Failed to save user');
     } finally { setSaving(false); }
   };

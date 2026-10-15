@@ -1,3 +1,4 @@
+import { errorMessage } from '@/lib/utils';
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -275,7 +276,7 @@ export default function AccountVerification() {
       // Process IDs in batches to handle large lists
       // Supabase .in() has a practical limit, so we batch in groups of 100
       const batchSize = 100;
-      let allExistingHosts: any[] = [];
+      let allExistingHosts: Pick<Host, 'id' | 'host_id' | 'host_name' | 'estado' | 'ver_date'>[] = [];
 
       for (let i = 0; i < idsToVerify.length; i += batchSize) {
         const batch = idsToVerify.slice(i, i + batchSize);
@@ -291,14 +292,14 @@ export default function AccountVerification() {
       }
 
       // Categorize the IDs
-      const foundIds = new Set(allExistingHosts.map((h: any) => h.host_id));
+      const foundIds = new Set(allExistingHosts.map((h) => h.host_id));
       const notFoundIds = idsToVerify.filter(id => !foundIds.has(id));
       const alreadyVerifiedIds = allExistingHosts
-        .filter((h: any) => h.estado === 'Verified')
-        .map((h: any) => h.host_id);
+        .filter((h) => h.estado === 'Verified')
+        .map((h) => h.host_id);
       const toUpdateIds = allExistingHosts
-        .filter((h: any) => h.estado !== 'Verified')
-        .map((h: any) => h.host_id);
+        .filter((h) => h.estado !== 'Verified')
+        .map((h) => h.host_id);
 
       // Update ONLY the hosts from the provided list that need verification
       if (toUpdateIds.length > 0) {
@@ -403,7 +404,7 @@ export default function AccountVerification() {
       const batchSize = 100;
 
       // Re-check each ID against Supabase to avoid duplicates from concurrent processes
-      let stillMissing: string[] = [];
+      const stillMissing: string[] = [];
       for (let i = 0; i < notFoundIds.length; i += batchSize) {
         const batch = notFoundIds.slice(i, i + batchSize);
         const { data: existing, error: checkError } = await supabase
@@ -412,7 +413,7 @@ export default function AccountVerification() {
           .in('host_id', batch);
 
         if (checkError) throw checkError;
-        const existingIds = new Set((existing || []).map((h: any) => h.host_id));
+        const existingIds = new Set((existing || []).map((h) => h.host_id));
         for (const id of batch) {
           if (!existingIds.has(id)) {
             stillMissing.push(id);
@@ -446,7 +447,7 @@ export default function AccountVerification() {
       // Log creation of missing host records as a separate auditable action
       await ActivityLogger.log(
         user,
-        'create' as any,
+        'create',
         `Created ${created} missing host record(s) via verification (IDs: ${stillMissing.slice(0, 20).join(', ')}${stillMissing.length > 20 ? '...' : ''})`,
         'host',
         undefined,
@@ -459,7 +460,7 @@ export default function AccountVerification() {
       fetchHosts();
     } catch (error) {
       console.error('Create missing records error:', error);
-      setCreateMissingResult({ created, skipped, errors: [...errors, (error as any)?.message || 'Unknown error'] });
+      setCreateMissingResult({ created, skipped, errors: [...errors, errorMessage(error, 'Unknown error')] });
     } finally {
       setCreatingMissing(false);
     }
@@ -541,7 +542,7 @@ export default function AccountVerification() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Account Status</label>
                       <select
                         value={filterStatus}
-                        onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
+                        onChange={(e) => { setFilterStatus(e.target.value as typeof filterStatus); setCurrentPage(1); }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="all">All Statuses</option>
@@ -554,7 +555,7 @@ export default function AccountVerification() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Real Status</label>
                       <select
                         value={filterReal}
-                        onChange={(e) => { setFilterReal(e.target.value as any); setCurrentPage(1); }}
+                        onChange={(e) => { setFilterReal(e.target.value as typeof filterReal); setCurrentPage(1); }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="all">All</option>

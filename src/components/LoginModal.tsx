@@ -1,3 +1,4 @@
+import { errorMessage } from '@/lib/utils';
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Mail, AlertCircle, Database, ArrowLeft, KeyRound, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -14,7 +15,7 @@ function AnimatedBackground() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     let animationId: number;
-    let particles: Particle[] = [];
+    const particles: Particle[] = [];
     let mouseX = 0;
     let mouseY = 0;
     const resizeCanvas = () => {
@@ -301,8 +302,8 @@ export default function LoginModal() {
       setUserId(user.id);
       setViewMode('verify-code');
       setSuccessMessage(`A reset code has been sent to ${resetEmail}`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to process password reset');
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to process password reset'));
     } finally {
       setLoading(false);
     }
@@ -331,8 +332,8 @@ export default function LoginModal() {
       }
       setUserId(tokenData.user_id);
       setViewMode('reset-password');
-    } catch (err: any) {
-      setError(err.message || 'Failed to verify code');
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to verify code'));
     } finally {
       setLoading(false);
     }
@@ -367,8 +368,8 @@ export default function LoginModal() {
         used: true
       }).eq('token', enteredToken.toUpperCase());
       setViewMode('success');
-    } catch (err: any) {
-      setError(err.message || 'Failed to reset password');
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to reset password'));
     } finally {
       setLoading(false);
     }

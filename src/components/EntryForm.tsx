@@ -1,3 +1,4 @@
+import { errorMessage } from '@/lib/utils';
 import React, { useState, useEffect } from 'react';
 import { Save, X, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -50,7 +51,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [originalData, setOriginalData] = useState<Record<string, any> | null>(null);
+  const [originalData, setOriginalData] = useState<Record<string, unknown> | null>(null);
   const [availableUsers, setAvailableUsers] = useState<AppUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
 
@@ -187,7 +188,7 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
         : null;
 
       // Prepare data - convert empty strings to null for date fields and optional text fields
-      const dataToSave: Record<string, any> = {
+      const dataToSave: Record<string, unknown> = {
         host_name: formData.host_name,
         host_id: formData.host_id,
         reg_date: formData.reg_date,
@@ -250,14 +251,14 @@ export default function EntryForm({ entry, onSave, onCancel, disabled, isNewEntr
       onSave();
     } catch (error) {
       console.error('Save error:', error);
-      alert('Error al guardar el registro: ' + (error as any)?.message || 'Error desconocido');
+      alert('Error al guardar el registro: ' + errorMessage(error, 'Error desconocido'));
     } finally {
       setSaving(false);
     }
   };
 
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));

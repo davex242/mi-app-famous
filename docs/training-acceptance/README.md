@@ -2,7 +2,7 @@
 
 Fecha de trabajo: 14 de octubre de 2026 (Costa Rica). Los identificadores de ejecución de los fixtures usan UTC.
 
-**Producción: NO APROBADA.** Este informe distingue resultados locales, HTTP alojado y el recorrido de navegador protegido por Vercel. No se modifica `main`, producción ni el padrón oficial de DatabasePad.
+**Producción: NO APROBADA.** Seguimiento posterior: [59 errores de lint corregidos y registros revisados](lint-follow-up.md). Este informe distingue resultados locales, HTTP alojado y el recorrido de navegador protegido por Vercel. No se modifica `main`, producción ni el padrón oficial de DatabasePad.
 
 ## Destinos y cambios
 
@@ -35,7 +35,7 @@ Fecha de trabajo: 14 de octubre de 2026 (Costa Rica). Los identificadores de eje
 | Reprueba de inscripción completada y transferencia | 26 pruebas: aprobadas |
 | `npx --no-install tsc -p tsconfig.app.json --noEmit` | Aprobado |
 | `npm run build` | Aprobado; advertencia de tamaño del bundle y Browserslist antiguo |
-| `npm run lint` | Fallido: 59 errores y 27 advertencias; principalmente tipado `any` en código existente. No se desactivaron reglas |
+| `npm run lint` | Seguimiento: aprobado, 0 errores y 27 advertencias; ver detalle del seguimiento |
 
 Los grupos se solapan: las repruebas no deben sumarse como casos nuevos. Los archivos de pruebas alojadas contienen además aserciones internas que no se presentan como casos del runner Node.
 
@@ -81,7 +81,7 @@ Se aprobaron **80 comprobaciones HTTP alojadas** y cinco comprobaciones SQL de R
 | 4. Evidencias y seguimiento | PNG/JPEG/WebP/PDF/MP4 alojados, consentimiento, checksum/contenido, rechazo por alcance; alertas y evaluación más reciente en navegador aislado: aprobado |
 | 5. Reportes | Cierre/exportación alojados; estadísticas, filtros y CSV protegido en navegador aislado: aprobado. Navegación del Preview protegido no ejecutada |
 | 6. Seguridad | JWT real, cuenta activa, RLS, denegación de preguntas/claves por Data API, permisos cruzados, caducidad y carrera de renovación/logout: aprobado; advertencia de HIBP requiere plan Pro |
-| 7. Liberación | Build/TypeScript y Preview: aprobados. Lint, registros runtime y recorrido autenticado del Preview protegido: pendientes; producción no aprobada |
+| 7. Liberación | Build/TypeScript y Preview: aprobados. Lint y registros Supabase resueltos en el seguimiento; recorrido autenticado del Preview protegido: pendiente; producción no aprobada |
 
 La caída de respuesta se prueba en Chromium para 10/25/50 preguntas: se conserva el formulario y se reenvía exactamente el mismo intento y respuestas. La idempotencia real del servidor se verifica además en las entregas HTTP alojadas. Los resultados esperados 401/403/404/409 no se cuentan como defectos ni como operaciones exitosas; sus pruebas pasan cuando la denegación corresponde al caso.
 
@@ -100,8 +100,8 @@ Se eliminaron las seis cuentas sin uso del primer aprovisionamiento fallido; se 
 
 1. Revisar/publicar el borrador del entorno para activar los destinos de red Preview y conservar la instalación y el arranque. Esto no publica la aplicación en producción.
 2. Verificar el login completo y la navegación con una sesión autorizada de Vercel. No se crearon excepciones a su protección.
-3. Recuperar los registros runtime cuando Supabase vuelva a responder correctamente; revisar también el runtime del gateway Vercel.
+3. Los registros Supabase se recuperaron y revisaron en el seguimiento; falta revisar el runtime del gateway durante el recorrido autenticado de Vercel.
 4. Decidir si contratar Pro para activar protección contra contraseñas filtradas. No se cambió el plan.
-5. Resolver la deuda de lint existente antes de declarar todos los checks verdes; las 59 incidencias son un pendiente técnico, no un bloqueo de credenciales.
+5. Los 59 errores de lint se corrigieron en el seguimiento; quedan 27 advertencias visibles para mantenimiento.
 
 **Recomendación:** conservar en Preview. El flujo sintético alojado funciona, pero aún no existe evidencia suficiente para aprobar producción.

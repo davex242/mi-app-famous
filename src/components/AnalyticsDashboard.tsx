@@ -1,3 +1,4 @@
+import type { RecruiterCommissionRow } from '@/types';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   BarChart,
@@ -73,12 +74,12 @@ export default function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) 
       if (error) throw error;
       
       const settingsMap: Record<string, RecruiterCommissionSettings> = {};
-      (data || []).forEach((setting: any) => {
+      (data || []).forEach((setting: RecruiterCommissionRow) => {
         settingsMap[setting.recruiter_name] = {
           recruiter_name: setting.recruiter_name,
-          base_commission: parseFloat(setting.base_commission) || DEFAULT_BASE_COMMISSION,
-          additional_percentage: parseFloat(setting.additional_percentage) || 0,
-          max_commission: parseFloat(setting.max_commission) || MAX_COMMISSION_LIMIT
+          base_commission: parseFloat(String(setting.base_commission)) || DEFAULT_BASE_COMMISSION,
+          additional_percentage: parseFloat(String(setting.additional_percentage)) || 0,
+          max_commission: parseFloat(String(setting.max_commission)) || MAX_COMMISSION_LIMIT
         };
       });
       setRecruiterSettings(settingsMap);
@@ -279,7 +280,7 @@ export default function AnalyticsDashboard({ onBack }: AnalyticsDashboardProps) 
         <div className="flex items-center gap-3">
           <select
             value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
+            onChange={(e) => setDateRange(e.target.value as typeof dateRange)}
             className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
           >
             <option value="7d">Last 7 Days</option>

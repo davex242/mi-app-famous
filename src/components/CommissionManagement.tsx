@@ -1,3 +1,5 @@
+import { errorMessage } from '@/lib/utils';
+import type { RecruiterCommissionRow } from '@/types';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   DollarSign,
@@ -105,13 +107,13 @@ export default function CommissionManagement({ onBack }: CommissionManagementPro
       if (error) throw error;
       
       const settingsMap: Record<string, RecruiterCommissionSettings> = {};
-      (data || []).forEach((setting: any) => {
+      (data || []).forEach((setting: RecruiterCommissionRow) => {
         // Ensure numeric values are properly converted from database
         settingsMap[setting.recruiter_name] = {
           ...setting,
-          base_commission: parseFloat(setting.base_commission) || DEFAULT_BASE_COMMISSION,
-          additional_percentage: parseFloat(setting.additional_percentage) || 0,
-          max_commission: parseFloat(setting.max_commission) || MAX_COMMISSION_LIMIT
+          base_commission: parseFloat(String(setting.base_commission)) || DEFAULT_BASE_COMMISSION,
+          additional_percentage: parseFloat(String(setting.additional_percentage)) || 0,
+          max_commission: parseFloat(String(setting.max_commission)) || MAX_COMMISSION_LIMIT
         };
       });
       setRecruiterSettings(settingsMap);
@@ -156,8 +158,8 @@ export default function CommissionManagement({ onBack }: CommissionManagementPro
       );
     }
     filtered.sort((a, b) => {
-      let aVal = a[sortField] || '';
-      let bVal = b[sortField] || '';
+      const aVal = a[sortField] || '';
+      const bVal = b[sortField] || '';
       return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
     return filtered;
@@ -742,9 +744,9 @@ export default function CommissionManagement({ onBack }: CommissionManagementPro
         currentTotalCommission
       );
       
-    } catch (error: any) {
+    } catch (error) {
       console.error('Save settings error:', error);
-      alert(`Failed to save commission settings: ${error.message || 'Unknown error'}`);
+      alert(`Failed to save commission settings: ${errorMessage(error, 'Unknown error')}`);
     } finally {
       setSavingSettings(false);
     }

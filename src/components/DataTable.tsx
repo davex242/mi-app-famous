@@ -1,3 +1,4 @@
+import { errorMessage } from '@/lib/utils';
 import React, { useState } from 'react';
 import { 
   ChevronUp, 
@@ -150,7 +151,7 @@ export default function DataTable({ data, onView, onEdit, onDelete, loading, onR
   const handleBulkUpdate = async () => {
     setBulkSaving(true);
     try {
-      const updateData: Record<string, any> = {
+      const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
       
@@ -180,7 +181,7 @@ export default function DataTable({ data, onView, onEdit, onDelete, loading, onR
       }
     } catch (error) {
       console.error('Bulk update error:', error);
-      alert('Failed to update records: ' + (error as any)?.message || 'Unknown error');
+      alert('Failed to update records: ' + errorMessage(error, 'Unknown error'));
     } finally {
       setBulkSaving(false);
     }

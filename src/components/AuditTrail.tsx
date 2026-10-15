@@ -148,7 +148,7 @@ export default function AuditTrail({ hostId }: AuditTrailProps) {
     setExpandedLogs(newExpanded);
   };
 
-  const renderChanges = (oldValues: Record<string, any> | null, newValues: Record<string, any> | null) => {
+  const renderChanges = (oldValues: Record<string, unknown> | null, newValues: Record<string, unknown> | null) => {
     if (!oldValues && !newValues) return null;
 
     const allKeys = new Set([
@@ -156,7 +156,7 @@ export default function AuditTrail({ hostId }: AuditTrailProps) {
       ...Object.keys(newValues || {})
     ]);
 
-    const changes: { field: string; oldVal: any; newVal: any }[] = [];
+    const changes: { field: string; oldVal: unknown; newVal: unknown }[] = [];
     
     allKeys.forEach(key => {
       const oldVal = oldValues?.[key];

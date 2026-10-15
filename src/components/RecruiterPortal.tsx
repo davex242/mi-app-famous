@@ -1,3 +1,4 @@
+import type { RecruiterCommissionRow } from '@/types';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users,
@@ -110,12 +111,12 @@ export default function RecruiterPortal({ onBack }: RecruiterPortalProps) {
       if (error) throw error;
       
       const settingsMap: Record<string, RecruiterCommissionSettings> = {};
-      (data || []).forEach((setting: any) => {
+      (data || []).forEach((setting: RecruiterCommissionRow) => {
         settingsMap[setting.recruiter_name] = {
           recruiter_name: setting.recruiter_name,
-          base_commission: parseFloat(setting.base_commission) || DEFAULT_BASE_COMMISSION,
-          additional_percentage: parseFloat(setting.additional_percentage) || 0,
-          max_commission: parseFloat(setting.max_commission) || MAX_COMMISSION_LIMIT
+          base_commission: parseFloat(String(setting.base_commission)) || DEFAULT_BASE_COMMISSION,
+          additional_percentage: parseFloat(String(setting.additional_percentage)) || 0,
+          max_commission: parseFloat(String(setting.max_commission)) || MAX_COMMISSION_LIMIT
         };
       });
       setRecruiterSettings(settingsMap);
@@ -322,8 +323,8 @@ export default function RecruiterPortal({ onBack }: RecruiterPortalProps) {
     }
 
     filtered.sort((a, b) => {
-      let aVal = a[sortField] || '';
-      let bVal = b[sortField] || '';
+      const aVal = a[sortField] || '';
+      const bVal = b[sortField] || '';
       return sortDirection === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
     });
 

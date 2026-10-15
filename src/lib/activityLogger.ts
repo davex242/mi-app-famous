@@ -8,8 +8,8 @@ interface LogActivityParams {
   description: string;
   entityType?: string;
   entityId?: string;
-  oldValues?: Record<string, any> | null;
-  newValues?: Record<string, any> | null;
+  oldValues?: Record<string, unknown> | null;
+  newValues?: Record<string, unknown> | null;
 }
 
 export async function logActivity({
@@ -63,7 +63,7 @@ export const ActivityLogger = {
       entityId: user.id,
     }),
 
-  createHost: (user: AppUser | null, hostName: string, hostId: string, newData: Record<string, any>) =>
+  createHost: (user: AppUser | null, hostName: string, hostId: string, newData: Record<string, unknown>) =>
     logActivity({
       user,
       actionType: 'create',
@@ -73,7 +73,7 @@ export const ActivityLogger = {
       newValues: newData,
     }),
 
-  updateHost: (user: AppUser | null, hostName: string, hostId: string, oldData: Record<string, any>, newData: Record<string, any>) =>
+  updateHost: (user: AppUser | null, hostName: string, hostId: string, oldData: Record<string, unknown>, newData: Record<string, unknown>) =>
     logActivity({
       user,
       actionType: 'update',
@@ -84,7 +84,7 @@ export const ActivityLogger = {
       newValues: newData,
     }),
 
-  deleteHost: (user: AppUser | null, hostName: string, hostId: string, oldData: Record<string, any>) =>
+  deleteHost: (user: AppUser | null, hostName: string, hostId: string, oldData: Record<string, unknown>) =>
     logActivity({
       user,
       actionType: 'delete',
@@ -149,7 +149,7 @@ export const ActivityLogger = {
       newValues: { real: isReal },
     }),
 
-  bulkUpdate: (user: AppUser | null, count: number, changes: Record<string, any>) =>
+  bulkUpdate: (user: AppUser | null, count: number, changes: Record<string, unknown>) =>
     logActivity({
       user,
       actionType: 'update',
@@ -210,7 +210,7 @@ export const ActivityLogger = {
     }),
 
   // Generic log method for flexible logging
-  log: (user: AppUser | null, actionType: ActionType, description: string, entityType?: string, entityId?: string, newValues?: Record<string, any>) =>
+  log: (user: AppUser | null, actionType: ActionType, description: string, entityType?: string, entityId?: string, newValues?: Record<string, unknown>) =>
     logActivity({
       user,
       actionType,

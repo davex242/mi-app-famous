@@ -101,7 +101,7 @@ export default function DeactivationRequests() {
   const [scheduleTimezone, setScheduleTimezone] = useState('UTC');
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [totalActiveRecruiters, setTotalActiveRecruiters] = useState<number>(0);
-  const [lastCheckResult, setLastCheckResult] = useState<any>(null);
+  const [lastCheckResult, setLastCheckResult] = useState<unknown>(null);
 
 
   // Webhook URL for external cron services
@@ -178,7 +178,7 @@ export default function DeactivationRequests() {
             if (result.totalActiveRecruiters !== undefined) {
               setLastCheckResult(result);
             }
-          } catch {}
+          } catch { /* Continue displaying other job history when a stored result is invalid. */ }
         }
       }
     } catch (error) {

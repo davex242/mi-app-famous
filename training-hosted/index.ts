@@ -6,7 +6,7 @@ import {normalizePNG} from '../training-isolation/private-images.mjs';
 import {imageFixture} from '../training-isolation/image-fixtures.mjs';
 import {hostedAdministration} from './administration.mjs';
 import {verifyHostedUser,currentHostedActor} from './identity.mjs';
-(globalThis as any).Buffer=Buffer;
+Object.assign(globalThis,{Buffer});
 import {hostedServerConfig} from './configuration.mjs';
 const {project,ownerEmail}=hostedServerConfig(name=>Deno.env.get(name));
 const keys=JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')||'{}');
@@ -24,7 +24,17 @@ const operations:Record<string,string>={
 };
 const fail=(status:number,message:string)=>{throw new ApiError(status,message);};
 async function body(req:Request,max:number){const reader=req.body?.getReader();if(!reader)return {};let size=0;const chunks=[];try{while(true){const row=await reader.read();if(row.done)break;size+=row.value.length;if(size>max){await reader.cancel();fail(413,'Request exceeds limit');}chunks.push(row.value);}}finally{reader.releaseLock();}const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}try{return JSON.parse(new TextDecoder().decode(bytes)||'{}');}catch{fail(400,'Invalid JSON');}}
-const adapter=(tx:any)=>({query:async(text:string,params:any[]=[])=>({rows:await tx.unsafe(text,params)}),exec:async(text:string)=>{await tx.unsafe(text);},transaction:(operation:any)=>operation(adapter(tx))});
+type QueryParameters = NonNullable<Parameters<typeof sql.unsafe>[1]>;
+type DatabaseAdapter = {
+ query: (text:string,params?:QueryParameters)=>Promise<{rows:Awaited<ReturnType<typeof sql.unsafe>>}>;
+ exec: (text:string)=>Promise<void>;
+ transaction: <T>(operation:(db:DatabaseAdapter)=>T)=>T;
+};
+const adapter=(tx:Pick<typeof sql,'unsafe'>):DatabaseAdapter=>({
+ query:async(text,params=[])=>({rows:await tx.unsafe(text,params)}),
+ exec:async text=>{await tx.unsafe(text);},
+ transaction:operation=>operation(adapter(tx))
+});
 Deno.serve(async(req:Request)=>{
  const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
  const send=(status:number,value:unknown)=>new Response(JSON.stringify(value),{status,headers});
@@ -41,7 +51,7 @@ Deno.serve(async(req:Request)=>{
    const db=adapter(tx),service=createTrainingService(db,{readerRole:'training_preview_reader',verifiedActor:async inner=>{if(!user)fail(401,'Verified session required');return currentHostedActor(inner,user,{ownerEmail});}});
    if(path.startsWith('/api/identity/'))return hostedAdministration(db,await service.me(token),path,payload);
    if(path==='/api/workspace'){const actor=await service.me(token);const labels=(await db.query('select a.host_id,h.display_name,h.mico_id from training_private.training_host_assignments a join training_private.training_hosts h on h.id=a.host_id where $1::boolean or a.recruiter_id=$2 or exists(select 1 from public.training_enrollments e where e.host_id=a.host_id and e.recruiter_id=$2)',[['superadmin','subadmin'].includes(actor.role),actor.app_user_id])).rows;const result=await service.workspace(token);result.trainees=result.trainees.map(row=>({...row,label:labels.find(h=>h.host_id===row.host_id)?.display_name||'Emisor',mico_id:labels.find(h=>h.host_id===row.host_id)?.mico_id||null}));return result;}
-   const result=path==='/api/me'?await service.me(token):path==='/api/workspace'?await service.workspace(token):await (service as any)[operations[path]](token,payload);
+   const result=path==='/api/me'?await service.me(token):path==='/api/workspace'?await service.workspace(token):await (service as unknown as Record<string,(token:string,payload:unknown)=>unknown>)[operations[path]](token,payload);
    return result;
   });
   return send(200,value);

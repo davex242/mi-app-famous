@@ -65,7 +65,7 @@ export default function Sidebar({ activeView, onViewChange, isOpen, onToggle }: 
   // Filter menu items based on user role
   const filteredItems = menuItems.filter(item => {
     // Check for superAdminOnly items
-    if ((item as any).superAdminOnly && user?.role !== 'superadmin') return false;
+    if (item.superAdminOnly && user?.role !== 'superadmin') return false;
     
     // SuperAdmin and SubAdmin users can see all menu items
     if (user?.role === 'superadmin' || user?.role === 'subadmin') return true;

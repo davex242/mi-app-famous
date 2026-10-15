@@ -379,5 +379,17 @@
     "Supabase logs API returns provider backend error.",
     "Leaked-password protection requires Pro (HTTP 402); subscription unchanged.",
     "Repository lint: 59 errors / 27 warnings."
-  ]
+  ],
+  "follow_up": {
+    "lint_errors": 0,
+    "lint_warnings": 27,
+    "hosted_test_files_passed": 14,
+    "application_typecheck": "passed",
+    "hosted_entrypoint_typecheck": "passed with postgres 3.4.3 types and Deno host declarations",
+    "vite_build": "passed",
+    "edge_function_version": 19,
+    "hosted_smoke": "passed",
+    "supabase_runtime_logs": "reviewed; one expected SQLSTATE 42501 denial; no function ERROR severity in inspected window",
+    "protected_preview_browser": "blocked by active runtime egress policy"
+  }
 }
