@@ -47,7 +47,7 @@ export function createAcceptedCourseOperations(run,{requireAdmin,fields,text,fai
    }
    await audit(tx,actor,'program_created','program',program.id);
    await tx.query(`insert into public.training_events(id,actor_app_user_id,event_type,entity_type,entity_id,details)
-    values($1,$2,'accepted_course_loaded','program',$3,$4)`,[markerId(program.id),actor.app_user_id,program.id,JSON.stringify({source_key:plan.source_key,source_hash:plan.source_hash,policy:plan.policy,links})]);
+    values($1,$2,'accepted_course_loaded','program',$3,$4::text::jsonb)`,[markerId(program.id),actor.app_user_id,program.id,JSON.stringify({source_key:plan.source_key,source_hash:plan.source_hash,policy:plan.policy,links})]);
    return {...summary(plan,{state:'already_loaded',program_id:program.id,program_status:'draft'}),already_loaded:false};
   }),
  };

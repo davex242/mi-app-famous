@@ -21,7 +21,7 @@ export async function hostedAdministration(tx,actor,path,body){
   const id=principal?.app_user_id||randomUUID(),name=text(body.display_name,120),mico_id=mico(body.mico_id),legacy=optional(body.legacy_user_key);
   await tx.query('insert into training_private.training_users(id,display_name,mico_id,legacy_user_key) values($1,$2,$3,$4) on conflict(id) do update set display_name=excluded.display_name,mico_id=excluded.mico_id,legacy_user_key=excluded.legacy_user_key',[id,name,mico_id,legacy]);
   await tx.query('insert into training_private.training_principals(auth_user_id,app_user_id,role,is_active) values($1,$2,$3,$4) on conflict(auth_user_id) do update set role=excluded.role,is_active=excluded.is_active',[auth,id,body.role,body.is_active]);
-  await tx.query("insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,details) values($1,'identity_user_reviewed','training_user',$2,$3)",[actor.app_user_id,id,JSON.stringify({role:body.role,is_active:body.is_active})]);return {saved:true};
+  await tx.query("insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,details) values($1,'identity_user_reviewed','training_user',$2,$3::text::jsonb)",[actor.app_user_id,id,JSON.stringify({role:body.role,is_active:body.is_active})]);return {saved:true};
  }
  if(path==='/api/identity/host'){
   fields(body,['id','display_name','mico_id','legacy_host_key','recruiter_id','confirmed','expected_hash']);const id=body.id?uuid(body.id):randomUUID(),recruiter=uuid(body.recruiter_id);
@@ -29,7 +29,7 @@ export async function hostedAdministration(tx,actor,path,body){
   if(body.id){const prior=(await tx.query('select h.*,a.recruiter_id from training_private.training_hosts h join training_private.training_host_assignments a on a.host_id=h.id where h.id=$1 for update of h,a',[id])).rows[0];if(!prior)fail(404,'Training host unavailable');if(body.expected_hash!==revision(prior,'host'))fail(409,'Assignment changed; review again');}else if(body.expected_hash!==null)fail(400,'Invalid new assignment review');
   await tx.query('insert into training_private.training_hosts(id,display_name,mico_id,legacy_host_key) values($1,$2,$3,$4) on conflict(id) do update set display_name=excluded.display_name,mico_id=excluded.mico_id,legacy_host_key=excluded.legacy_host_key',[id,text(body.display_name,120),mico(body.mico_id),optional(body.legacy_host_key)]);
   await tx.query('insert into training_private.training_host_assignments(host_id,recruiter_id,assigned_by) values($1,$2,$3) on conflict(host_id) do update set recruiter_id=excluded.recruiter_id,assigned_by=excluded.assigned_by,assigned_at=now()',[id,recruiter,actor.app_user_id]);
-  await tx.query("insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,details) values($1,'identity_host_assigned','training_host',$2,$3)",[actor.app_user_id,id,JSON.stringify({recruiter_id:recruiter})]);return {saved:true};
+  await tx.query("insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,details) values($1,'identity_host_assigned','training_host',$2,$3::text::jsonb)",[actor.app_user_id,id,JSON.stringify({recruiter_id:recruiter})]);return {saved:true};
  }
  fail(404,'Identity route unavailable');
 }

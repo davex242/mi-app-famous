@@ -53,7 +53,7 @@ export function createExamOperations(db, run, { fields, text, uuid, fail, requir
         values($1,$2,$3,$4,$5) returning *`,[key,(latest?.version||0)+1,body.pass_percent,actor.app_user_id,prepared.length])).rows[0];
       for(let i=0;i<prepared.length;i++){
         const q=prepared[i];
-        const row=(await tx.query('insert into public.training_exam_questions(exam_version_id,position,prompt,options) values($1,$2,$3,$4) returning id',[v.id,i+1,q.prompt,JSON.stringify(q.options)])).rows[0];
+        const row=(await tx.query('insert into public.training_exam_questions(exam_version_id,position,prompt,options) values($1,$2,$3,$4::text::jsonb) returning id',[v.id,i+1,q.prompt,JSON.stringify(q.options)])).rows[0];
         await tx.query('insert into training_private.training_exam_keys(question_id,correct_option) values($1,$2)',[row.id,q.correct_option]);
       }
       await tx.query("update public.training_exam_versions set status='published' where id=$1",[v.id]);

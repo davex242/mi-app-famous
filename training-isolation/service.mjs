@@ -34,7 +34,7 @@ function requireAdmin(actor) { if (!admin(actor)) fail(403, 'Administrative role
 function requireWrite(actor) { if (!admin(actor) && actor.role !== 'edit') fail(403, 'Write access denied'); }
 async function audit(tx, actor, action, entity, entityId, enrollmentId = null, details = {}) {
   await tx.query(`insert into public.training_events(actor_app_user_id,event_type,entity_type,entity_id,enrollment_id,details)
-    values($1,$2,$3,$4,$5,$6)`, [actor.app_user_id, action, entity, entityId, enrollmentId, JSON.stringify(details)]);
+    values($1,$2,$3,$4,$5,$6::text::jsonb)`, [actor.app_user_id, action, entity, entityId, enrollmentId, JSON.stringify(details)]);
 }
 async function scope(tx, actor, host) {
   const { rows } = await tx.query('select recruiter_id from training_private.training_host_assignments where host_id=$1 for share', [host]);
