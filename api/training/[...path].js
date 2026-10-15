@@ -17,14 +17,15 @@ export default async function handler(req,res){
    else {let size=0;const parts=[];for await(const chunk of req){size+=chunk.length;if(size>3*1024*1024){res.statusCode=413;return res.end();}parts.push(chunk);}body=Buffer.concat(parts).toString('utf8');}
    if(Buffer.byteLength(body)>3*1024*1024){res.statusCode=413;return res.end();}
   }
-  // GET requests are safe to retry once on transient upstream failures.
+  // Retry lightweight GET requests once. Workspace queries may be expensive;
+  // allow a longer timeout instead of starting a duplicate query.
   // Never retry POST: doing so could duplicate an enrollment or identity update.
   const requestId=randomUUID();
   res.setHeader('X-Training-Request-Id',requestId);
-  const attempts=req.method==='GET'?2:1;
+  const attempts=req.method==='GET'&&path!=='/api/workspace'?2:1;
   for(let attempt=0;attempt<attempts;attempt++){
    try{
-    const response=await fetch(config.backend+path,{method:req.method,redirect:'error',signal:AbortSignal.timeout(12000),headers:{...(auth?{Authorization:auth}:{}),'Content-Type':'application/json'},...(body?{body}:{})});
+    const response=await fetch(config.backend+path,{method:req.method,redirect:'error',signal:AbortSignal.timeout(path==='/api/workspace'?25000:15000),headers:{...(auth?{Authorization:auth}:{}),'Content-Type':'application/json'},...(body?{body}:{})});
     if(req.method==='GET'&&attempt===0&&[502,503,504].includes(response.status)){await response.body?.cancel();continue;}
     res.setHeader('Content-Type','application/json');
     res.statusCode=response.status;
