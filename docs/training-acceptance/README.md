@@ -4,6 +4,10 @@ Fecha de trabajo: 14 de octubre de 2026 (Costa Rica). Los identificadores de eje
 
 **Producción: NO APROBADA.** Seguimiento posterior: [59 errores de lint corregidos y registros revisados](lint-follow-up.md). Este informe distingue resultados locales, HTTP alojado y el recorrido de navegador protegido por Vercel. No se modifica `main`, producción ni el padrón oficial de DatabasePad.
 
+## Verificación del entorno publicado
+
+[Investigación actual de red y runtime](published-network-investigation.md): configuración publicada confirmada; los dominios Preview permitidos siguen rechazados por el proxy CONNECT. La navegación autenticada continúa pendiente. Esta comprobación no volvió a crear fixtures.
+
 ## Destinos y cambios
 
 - Rama exclusiva: `base44/setup-b8f0f68b`.
